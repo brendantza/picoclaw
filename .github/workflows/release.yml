@@ -20,7 +20,7 @@ jobs:
   # Build binaries for all platforms
   # ─────────────────────────────────────────────────────────────────────────────
   build-binaries:
-    name: Build Binary (${{ matrix.suffix }})
+    name: Build (${{ matrix.suffix }})
     runs-on: self-hosted
     strategy:
       matrix:
@@ -44,7 +44,7 @@ jobs:
         with:
           go-version: '1.26'
 
-      - name: 🏗️ Build Binary
+      - name: 🏗️ Build picoclaw
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -53,15 +53,44 @@ jobs:
           output="picoclaw-${{ matrix.suffix }}"
           version="${{ github.ref_name || github.event.inputs.version }}"
           go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw
-          echo "Built:"
+          echo "Built picoclaw:"
           ls -la "$output"
           file "$output"
 
-      - name: 📤 Upload Artifact
+      - name: 🏗️ Build picoclaw-launcher
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          output="picoclaw-launcher-${{ matrix.suffix }}"
+          version="${{ github.ref_name || github.event.inputs.version }}"
+          go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw-launcher
+          echo "Built picoclaw-launcher:"
+          ls -la "$output"
+          file "$output"
+
+      - name: 🏗️ Build picoclaw-launcher-tui
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          output="picoclaw-launcher-tui-${{ matrix.suffix }}"
+          version="${{ github.ref_name || github.event.inputs.version }}"
+          go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw-launcher-tui
+          echo "Built picoclaw-launcher-tui:"
+          ls -la "$output"
+          file "$output"
+
+      - name: 📤 Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: picoclaw-${{ matrix.suffix }}
-          path: picoclaw-${{ matrix.suffix }}
+          name: binaries-${{ matrix.suffix }}
+          path: |
+            picoclaw-${{ matrix.suffix }}
+            picoclaw-launcher-${{ matrix.suffix }}
+            picoclaw-launcher-tui-${{ matrix.suffix }}
           retention-days: 1
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -82,35 +111,29 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts
-          pattern: picoclaw-*
+          pattern: binaries-*
 
       - name: 📁 Prepare Release Files
         run: |
           mkdir -p release
-          # Copy binaries from artifacts
-          for dir in artifacts/picoclaw-*; do
+          # Copy all binaries from artifacts
+          for dir in artifacts/binaries-*/; do
             if [ -d "$dir" ]; then
-              cp "$dir"/picoclaw-* release/
+              cp "$dir"/picoclaw-* release/ 2>/dev/null || true
             fi
           done
-          # Copy install script
+          # Copy install script and README
           cp install.sh release/
+          cp README.md release/
+          echo "Release files:"
           ls -la release/
-
-      - name: 🔐 Generate Checksums
-        run: |
-          cd release
-          sha256sum picoclaw-* > ../checksums.txt
-          cat ../checksums.txt
 
       - name: 🚀 Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: PicoClaw ${{ github.ref_name || github.event.inputs.version }}
           tag_name: ${{ github.ref_name || github.event.inputs.version }}
-          files: |
-            release/*
-            checksums.txt
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -140,7 +163,7 @@ jobs:
       - name: 📥 Download Binary
         uses: actions/download-artifact@v4
         with:
-          name: picoclaw-${{ matrix.artifact }}
+          name: binaries-${{ matrix.artifact }}
           path: ./
 
       - name: 🏗️ Prepare Binary
