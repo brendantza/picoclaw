@@ -138,7 +138,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Build and push Docker images (downloads from GitHub release)
+  # Build and push Docker images
   # ─────────────────────────────────────────────────────────────────────────────
   build-docker:
     name: Docker (${{ matrix.platform }})
@@ -152,13 +152,26 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            arch: amd64
+            artifact: linux-amd64
           - platform: linux/arm64
-            arch: arm64
+            artifact: linux-arm64
 
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v6
+
+      - name: 📥 Download Binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries-${{ matrix.artifact }}
+          path: ./
+
+      - name: 🏗️ Prepare Binary
+        run: |
+          mv picoclaw-${{ matrix.artifact }} picoclaw
+          chmod +x picoclaw
+          ls -la picoclaw
+          file picoclaw
 
       - name: 🔧 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -174,11 +187,7 @@ jobs:
         run: |
           version="${{ github.ref_name || github.event.inputs.version }}"
           platform="${{ matrix.platform }}"
-          arch="${{ matrix.arch }}"
-          
-          # Build args
-          build_args="--build-arg VERSION=${version}"
-          build_args="${build_args} --build-arg GITHUB_REPO=${{ github.repository }}"
+          arch="${{ matrix.artifact }}"
           
           echo "Building for ${platform}..."
           echo "Tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-${arch}"
@@ -186,7 +195,6 @@ jobs:
           # Build and push
           docker buildx build \
             --platform "${platform}" \
-            ${build_args} \
             -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-${arch}" \
             --push \
             .
@@ -222,7 +230,7 @@ jobs:
           
           # Build manifest list from available platforms
           manifests=""
-          for arch in amd64 arm64; do
+          for arch in linux-amd64 linux-arm64; do
             tag="${version}-${arch}"
             echo "Checking ${repo}:${tag}..."
             if docker manifest inspect "${repo}:${tag}" > /dev/null 2>&1; then

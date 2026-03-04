@@ -2,8 +2,6 @@ FROM alpine:3.21
 
 ARG TARGETPLATFORM
 ARG TARGETARCH
-ARG VERSION
-ARG GITHUB_REPO=brendantza/picoclaw
 
 RUN apk add --no-cache ca-certificates tzdata curl jq
 
@@ -15,22 +13,9 @@ RUN addgroup -g 1000 picoclaw && \
 RUN mkdir -p /home/picoclaw/.picoclaw && \
     chown -R picoclaw:picoclaw /home/picoclaw
 
-# Download binary from GitHub release based on architecture
-RUN set -eux; \
-    case "${TARGETARCH}" in \
-        amd64) ARCH='amd64' ;; \
-        arm64) ARCH='arm64' ;; \
-        arm) ARCH='arm' ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}"; exit 1 ;; \
-    esac; \
-    if [ -z "${VERSION}" ]; then \
-        echo "VERSION build arg is required"; exit 1; \
-    fi; \
-    echo "Downloading picoclaw ${VERSION} for linux-${ARCH}..."; \
-    curl -fsSL \
-        "https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/picoclaw-linux-${ARCH}" \
-        -o /usr/local/bin/picoclaw; \
-    chmod +x /usr/local/bin/picoclaw
+# Copy pre-built binary from build context
+COPY picoclaw /usr/local/bin/picoclaw
+RUN chmod +x /usr/local/bin/picoclaw
 
 # Verify binary works
 RUN /usr/local/bin/picoclaw version
