@@ -1342,3 +1342,5 @@ This happens when another instance of the bot is running. Make sure only one `pi
 | **Brave Search** | 2000 queries/month  | Web search functionality              |
 | **Groq**         | Free tier available | Fast inference (Llama, Mixtral)       |
 | **Cerebras**     | Free tier available | Fast inference (Llama, Qwen, etc.)    |
+
+<!-- Docker build trigger: Wed Mar  4 05:05:09 PM EST 2026 -->
