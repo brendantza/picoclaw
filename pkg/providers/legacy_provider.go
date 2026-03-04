@@ -51,6 +51,17 @@ func CreateProvider(cfg *config.Config) (LLMProvider, string, error) {
 		modelCfg.Workspace = cfg.WorkspacePath()
 	}
 
+	// Inject KimiCoding API key from global providers config if not set
+	if modelCfg.APIKey == "" && cfg.Providers.KimiCoding.APIKey != "" {
+		modelCfg.APIKey = cfg.Providers.KimiCoding.APIKey
+	}
+	if modelCfg.APIBase == "" && cfg.Providers.KimiCoding.APIBase != "" {
+		modelCfg.APIBase = cfg.Providers.KimiCoding.APIBase
+	}
+	if modelCfg.Proxy == "" && cfg.Providers.KimiCoding.Proxy != "" {
+		modelCfg.Proxy = cfg.Providers.KimiCoding.Proxy
+	}
+
 	// Use factory to create provider
 	provider, modelID, err := CreateProviderFromConfig(modelCfg)
 	if err != nil {
