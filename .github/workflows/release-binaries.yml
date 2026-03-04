@@ -92,9 +92,17 @@ jobs:
           - Docker deployment ready
           - Coolify template included
 
-          ### Installation
+          ### Quick Install
 
-          **Linux/macOS:**
+          **Using install.sh:**
+          ```bash
+          # Download and run installer
+          curl -L -o install.sh https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/install.sh
+          chmod +x install.sh
+          ./install.sh
+          ```
+
+          **Manual Install (Linux/macOS):**
           ```bash
           # Download binary
           curl -L -o picoclaw https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/picoclaw-linux-amd64
@@ -116,14 +124,28 @@ jobs:
           picoclaw gateway
           ```
 
+          ### Files
+          | File | Description |
+          |------|-------------|
+          | `picoclaw-*` | Compiled binaries for various platforms |
+          | `install.sh` | Automated installer script |
+          | `checksums.txt` | SHA256 checksums for verification |
+
           ### Checksums
-          See `checksums.txt` for SHA256 checksums of all binaries.
+          See `checksums.txt` for SHA256 checksums of all files.
           EOF
+
+      - name: 📋 Copy install.sh to release folder
+        run: |
+          cp install.sh binaries/install.sh
+          chmod +x binaries/install.sh
+          ls -la binaries/
 
       - name: 🔐 Generate Checksums
         run: |
           cd binaries
-          find . -type f -exec sha256sum {} \; > ../checksums.txt
+          # Generate checksums for all files (binaries and install.sh)
+          find . -type f \( -name "picoclaw-*" -o -name "install.sh" \) -exec sha256sum {} \; > ../checksums.txt
           cat ../checksums.txt
 
       - name: 🚀 Create GitHub Release
@@ -133,8 +155,9 @@ jobs:
           body_path: RELEASE_NOTES.md
           files: |
             binaries/picoclaw-*/picoclaw-*
+            binaries/install.sh
             checksums.txt
-          generate_release_notes: true
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
