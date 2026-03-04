@@ -7,6 +7,14 @@
 #
 # Usage:
 #   docker-compose up -d
+#
+# Environment Variables:
+#   PICOCLAW_IMAGE - Docker image to use (default: ghcr.io/brendantza/picoclaw:latest)
+#   PICOCLAW_PORT - Port to expose (default: 18790)
+#   PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY - Kimi API key (required for Kimi)
+#   PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE - Kimi API base URL (default: https://api.kimi.com/coding)
+#   PICOCLAW_PROVIDERS_KIMI_CODING_PROXY - HTTP proxy for Kimi (optional)
+#   PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME - Default model to use (default: kimi-k2.5)
 # ============================================================
 
 services:
@@ -19,10 +27,24 @@ services:
       - "${PICOCLAW_PORT:-18790}:18790"
     
     environment:
-      - PICOCLAW_HOME=/app/.picoclaw
+      # PicoClaw home directory
+      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
+      
+      # Default model configuration
+      - PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=${PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME:-kimi-k2.5}
+      
+      # Kimi Coding Provider Configuration
+      - PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=${PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY:-}
+      - PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE=${PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE:-https://api.kimi.com/coding}
+      - PICOCLAW_PROVIDERS_KIMI_CODING_PROXY=${PICOCLAW_PROVIDERS_KIMI_CODING_PROXY:-}
+      
+      # Timezone
+      - TZ=${TZ:-Asia/Shanghai}
     
     volumes:
-      - picoclaw-data:/app/.picoclaw
+      - picoclaw-data:/home/picoclaw/.picoclaw
+      # Mount config.json if you have custom model configuration
+      # - ./config.json:/home/picoclaw/.picoclaw/config.json:ro
     
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:18790/health"]
