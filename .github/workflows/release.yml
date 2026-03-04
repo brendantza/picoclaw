@@ -17,10 +17,29 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
+  # Determine version to use
+  # ─────────────────────────────────────────────────────────────────────────────
+  version:
+    name: Determine Version
+    runs-on: self-hosted
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - name: Get version
+        id: get-version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Build binaries for all platforms
   # ─────────────────────────────────────────────────────────────────────────────
   build-binaries:
     name: Build (${{ matrix.suffix }})
+    needs: version
     runs-on: self-hosted
     strategy:
       matrix:
@@ -54,7 +73,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           output="picoclaw-${{ matrix.suffix }}"
-          version="${{ github.ref_name || github.event.inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw
           echo "Built picoclaw:"
           ls -la "$output"
@@ -67,7 +86,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           output="picoclaw-launcher-${{ matrix.suffix }}"
-          version="${{ github.ref_name || github.event.inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw-launcher
           echo "Built picoclaw-launcher:"
           ls -la "$output"
@@ -80,7 +99,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           output="picoclaw-launcher-tui-${{ matrix.suffix }}"
-          version="${{ github.ref_name || github.event.inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw-launcher-tui
           echo "Built picoclaw-launcher-tui:"
           ls -la "$output"
@@ -101,7 +120,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   create-release:
     name: Create GitHub Release
-    needs: build-binaries
+    needs: [version, build-binaries]
     runs-on: self-hosted
     permissions:
       contents: write
@@ -134,8 +153,8 @@ jobs:
       - name: 🚀 Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: PicoClaw ${{ github.ref_name || github.event.inputs.version }}
-          tag_name: ${{ github.ref_name || github.event.inputs.version }}
+          name: PicoClaw ${{ needs.version.outputs.version }}
+          tag_name: ${{ needs.version.outputs.version }}
           files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -145,7 +164,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   build-docker:
     name: Docker (${{ matrix.platform }})
-    needs: create-release
+    needs: [version, create-release]
     runs-on: self-hosted
     permissions:
       contents: read
@@ -188,7 +207,7 @@ jobs:
 
       - name: 🚀 Build and push (${{ matrix.platform }})
         run: |
-          version="${{ github.ref_name || github.event.inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           platform="${{ matrix.platform }}"
           arch="${{ matrix.artifact }}"
           
@@ -209,7 +228,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   merge-docker:
     name: Merge Docker Manifests
-    needs: build-docker
+    needs: [version, build-docker]
     runs-on: self-hosted
     permissions:
       contents: read
@@ -228,7 +247,7 @@ jobs:
 
       - name: 🔗 Create Multi-Arch Manifest
         run: |
-          version="${{ github.ref_name || github.event.inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           repo="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           
           # Build manifest list from available platforms
@@ -263,5 +282,5 @@ jobs:
 
       - name: 📋 Verify Manifest
         run: |
-          version="${{ github.ref_name || github.event.inputs.version }}"
+          version="${{ needs.version.outputs.version }}"
           docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}"
