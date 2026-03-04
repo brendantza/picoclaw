@@ -85,12 +85,40 @@ func (p *Provider) Chat(
 		return nil, err
 	}
 
-	resp, err := p.client.Messages.New(ctx, params, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("claude API call: %w", err)
+	// Use streaming for APIs that require it (e.g., Kimi Coding)
+	// Accumulate the streaming response into a complete message
+	return p.chatStreaming(ctx, params, opts)
+}
+
+func (p *Provider) chatStreaming(
+	ctx context.Context,
+	params anthropic.MessageNewParams,
+	opts []option.RequestOption,
+) (*LLMResponse, error) {
+	stream := p.client.Messages.NewStreaming(ctx, params, opts...)
+	defer stream.Close()
+
+	var message *anthropic.Message
+	for stream.Next() {
+		event := stream.Current()
+		// Use the accumulator pattern for streaming events
+		if message == nil {
+			message = &anthropic.Message{}
+		}
+		if err := message.Accumulate(event); err != nil {
+			return nil, fmt.Errorf("accumulating message event: %w", err)
+		}
 	}
 
-	return parseResponse(resp), nil
+	if err := stream.Err(); err != nil {
+		return nil, fmt.Errorf("claude API streaming call: %w", err)
+	}
+
+	if message == nil {
+		return nil, fmt.Errorf("no message received from streaming API")
+	}
+
+	return parseResponse(message), nil
 }
 
 func (p *Provider) GetDefaultModel() string {

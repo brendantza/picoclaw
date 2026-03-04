@@ -2,6 +2,7 @@ package providers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,22 +27,80 @@ func TestClaudeProvider_ChatRoundTrip(t *testing.T) {
 		var reqBody map[string]any
 		json.NewDecoder(r.Body).Decode(&reqBody)
 
-		resp := map[string]any{
-			"id":          "msg_test",
-			"type":        "message",
-			"role":        "assistant",
-			"model":       reqBody["model"],
-			"stop_reason": "end_turn",
-			"content": []map[string]any{
-				{"type": "text", "text": "Hello! How can I help you?"},
-			},
-			"usage": map[string]any{
-				"input_tokens":  15,
-				"output_tokens": 8,
+		// Return SSE streaming format
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		// Send message_start event
+		event1 := map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id":           "msg_test",
+				"type":         "message",
+				"role":         "assistant",
+				"model":        reqBody["model"],
+				"content":      []map[string]any{},
+				"stop_reason":  nil,
+				"usage":        map[string]any{"input_tokens": 15, "output_tokens": 0},
 			},
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		data1, _ := json.Marshal(event1)
+		fmt.Fprintf(w, "event: message_start\ndata: %s\n\n", data1)
+		w.(http.Flusher).Flush()
+
+		// Send content_block_start event
+		event2 := map[string]any{
+			"type":          "content_block_start",
+			"index":         0,
+			"content_block": map[string]any{"type": "text", "text": ""},
+		}
+		data2, _ := json.Marshal(event2)
+		fmt.Fprintf(w, "event: content_block_start\ndata: %s\n\n", data2)
+		w.(http.Flusher).Flush()
+
+		// Send content_block_delta events
+		text := "Hello! How can I help you?"
+		for i := 0; i < len(text); i += 5 {
+			end := i + 5
+			if end > len(text) {
+				end = len(text)
+			}
+			event := map[string]any{
+				"type":  "content_block_delta",
+				"index": 0,
+				"delta": map[string]any{"type": "text_delta", "text": text[i:end]},
+			}
+			data, _ := json.Marshal(event)
+			fmt.Fprintf(w, "event: content_block_delta\ndata: %s\n\n", data)
+			w.(http.Flusher).Flush()
+		}
+
+		// Send content_block_stop event
+		event4 := map[string]any{
+			"type":  "content_block_stop",
+			"index": 0,
+		}
+		data4, _ := json.Marshal(event4)
+		fmt.Fprintf(w, "event: content_block_stop\ndata: %s\n\n", data4)
+		w.(http.Flusher).Flush()
+
+		// Send message_delta event
+		event5 := map[string]any{
+			"type": "message_delta",
+			"delta": map[string]any{
+				"stop_reason":   "end_turn",
+				"stop_sequence": nil,
+			},
+			"usage": map[string]any{"output_tokens": 8},
+		}
+		data5, _ := json.Marshal(event5)
+		fmt.Fprintf(w, "event: message_delta\ndata: %s\n\n", data5)
+		w.(http.Flusher).Flush()
+
+		// Send message_stop event
+		event6 := map[string]any{"type": "message_stop"}
+		data6, _ := json.Marshal(event6)
+		fmt.Fprintf(w, "event: message_stop\ndata: %s\n\n", data6)
 	}))
 	defer server.Close()
 

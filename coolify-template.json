@@ -1,0 +1,75 @@
+{
+  "name": "PicoClaw",
+  "description": "Ultra-lightweight personal AI Assistant with Kimi 2.5 support - runs on resource-constrained devices",
+  "version": "1.0.0",
+  "author": "sipeed",
+  "repository": "https://github.com/sipeed/picoclaw",
+  "image": "picoclaw/picoclaw:latest",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "variables": [
+    {
+      "name": "PICOCLAW_PROVIDER",
+      "description": "Default LLM provider",
+      "default_value": "moonshot",
+      "required": true
+    },
+    {
+      "name": "PICOCLAW_MODEL",
+      "description": "Default model name in config",
+      "default_value": "k2p5",
+      "required": true
+    },
+    {
+      "name": "PICOCLAW_MAX_TOKENS",
+      "description": "Maximum tokens for LLM responses",
+      "default_value": "32768",
+      "required": false
+    },
+    {
+      "name": "KIMI_API_KEY",
+      "description": "Your Kimi API key (sk-kimi-...)",
+      "default_value": "",
+      "required": true
+    }
+  ],
+  "ports": [
+    {
+      "port": "18790",
+      "name": "Gateway HTTP",
+      "description": "HTTP port for gateway webhooks and health checks"
+    }
+  ],
+  "volumes": [
+    {
+      "name": "picoclaw-data",
+      "mount_path": "/app/.picoclaw",
+      "description": "Persistent storage for config, state, and workspace"
+    }
+  ],
+  "healthcheck": {
+    "test": ["CMD", "wget", "-qO-", "http://localhost:18790/health"],
+    "interval": "30s",
+    "timeout": "5s",
+    "retries": 3,
+    "start_period": "10s"
+  },
+  "resources": {
+    "cpu_limit": 2.0,
+    "memory_limit": "512M",
+    "cpu_reservation": 0.5,
+    "memory_reservation": "128M"
+  },
+  "tags": [
+    "ai",
+    "llm",
+    "chatbot",
+    "assistant",
+    "kimi",
+    "moonshot",
+    "openai-compatible"
+  ],
+  "documentation": "https://github.com/sipeed/picoclaw/blob/main/README.md"
+}

@@ -1,0 +1,68 @@
+# ============================================================
+# PicoClaw Docker Compose with Kimi 2.5 Support
+# ============================================================
+
+services:
+  picoclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: picoclaw:latest
+    container_name: picoclaw
+    restart: unless-stopped
+    
+    # Ports
+    ports:
+      - "${PICOCLAW_PORT:-18790}:18790"
+    
+    # Environment variables
+    environment:
+      - PICOCLAW_HOME=/app/.picoclaw
+      - PICOCLAW_CONFIG=/app/.picoclaw/config.json
+      # Kimi API Configuration
+      - PICOCLAW_AGENTS_DEFAULTS_PROVIDER=${PICOCLAW_PROVIDER:-moonshot}
+      - PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=${PICOCLAW_MODEL:-k2p5}
+      - PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS=${PICOCLAW_MAX_TOKENS:-32768}
+    
+    # Volumes for persistent data
+    volumes:
+      - picoclaw-data:/app/.picoclaw
+      # Optional: Mount custom config
+      # - ./config.json:/app/.picoclaw/config.json:ro
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:18790/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+    
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  picoclaw-data:
+    driver: local

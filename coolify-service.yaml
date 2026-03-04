@@ -1,0 +1,57 @@
+# ============================================================
+# Coolify Service Template for PicoClaw
+# ============================================================
+# To use in Coolify:
+# 1. Go to Services → Add Service → Choose "Docker Compose"
+# 2. Paste this YAML or use the Coolify template import feature
+# ============================================================
+
+version: '3.8'
+
+services:
+  picoclaw:
+    image: picoclaw/picoclaw:latest
+    container_name: picoclaw-${COOLIFY_SERVICE_ID}
+    restart: unless-stopped
+    
+    ports:
+      - "${PICOCLAW_PORT:-18790}:18790"
+    
+    environment:
+      - PICOCLAW_HOME=/app/.picoclaw
+      - PICOCLAW_AGENTS_DEFAULTS_PROVIDER=${PICOCLAW_PROVIDER:-moonshot}
+      - PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=${PICOCLAW_MODEL:-k2p5}
+      - PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS=${PICOCLAW_MAX_TOKENS:-32768}
+    
+    volumes:
+      - type: volume
+        source: picoclaw-data
+        target: /app/.picoclaw
+    
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:18790/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+    
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+volumes:
+  picoclaw-data:
+    driver: local
+    name: picoclaw-data-${COOLIFY_SERVICE_ID}

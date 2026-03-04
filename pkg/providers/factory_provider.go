@@ -136,6 +136,17 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 			cfg.RequestTimeout,
 		), modelID, nil
 
+	case "kimi-coding":
+		// Kimi Coding uses Anthropic Messages API format
+		apiBase := cfg.APIBase
+		if apiBase == "" {
+			apiBase = "https://api.kimi.com/coding"
+		}
+		if cfg.APIKey == "" {
+			return nil, "", fmt.Errorf("api_key is required for kimi-coding protocol (model: %s)", cfg.Model)
+		}
+		return NewClaudeProviderWithBaseURL(cfg.APIKey, apiBase), modelID, nil
+
 	case "antigravity":
 		return NewAntigravityProvider(), modelID, nil
 
@@ -194,6 +205,8 @@ func getDefaultAPIBase(protocol string) string {
 		return "http://localhost:11434/v1"
 	case "moonshot":
 		return "https://api.moonshot.cn/v1"
+	case "kimi-coding":
+		return "https://api.kimi.com/coding/v1"
 	case "shengsuanyun":
 		return "https://router.shengsuanyun.com/api/v1"
 	case "deepseek":
