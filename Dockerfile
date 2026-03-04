@@ -1,32 +1,33 @@
 # ============================================================
-# PicoClaw Docker Image with Kimi 2.5 Support
+# PicoClaw Docker Image - Using Release Binary
+# ============================================================
+# This Dockerfile downloads the pre-built release binary from GitHub
+# instead of compiling from source.
+#
+# Usage:
+#   docker build -t picoclaw:latest .
+#   docker build --build-arg VERSION=v0.3.0-kimi -t picoclaw:v0.3.0-kimi .
 # ============================================================
 
-# Stage 1: Build the picoclaw binary
-FROM golang:1.26-alpine AS builder
-
-RUN apk add --no-cache git make ca-certificates tzdata
-
-WORKDIR /src
-
-# Cache dependencies
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source and build
-COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-w -s" -o picoclaw ./cmd/picoclaw
-
-# ============================================================
-# Stage 2: Minimal runtime image
-# ============================================================
 FROM alpine:3.21
 
+# Build arguments
+ARG VERSION=latest
+ARG GITHUB_OWNER=brendantza
+ARG GITHUB_REPO=picoclaw
+
+# Labels
 LABEL org.opencontainers.image.title="PicoClaw"
 LABEL org.opencontainers.image.description="Ultra-lightweight personal AI Assistant with Kimi 2.5 support"
-LABEL org.opencontainers.image.source="https://github.com/sipeed/picoclaw"
+LABEL org.opencontainers.image.source="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}"
+LABEL org.opencontainers.image.version="${VERSION}"
 
-RUN apk add --no-cache ca-certificates tzdata curl
+# Install runtime dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    curl \
+    jq
 
 # Create non-root user
 RUN addgroup -g 1000 picoclaw && \
@@ -36,9 +37,36 @@ RUN addgroup -g 1000 picoclaw && \
 RUN mkdir -p /home/picoclaw/.picoclaw && \
     chown -R picoclaw:picoclaw /home/picoclaw
 
-# Copy binary
-COPY --from=builder /src/picoclaw /usr/local/bin/picoclaw
-RUN chmod +x /usr/local/bin/picoclaw
+# Detect architecture and download appropriate binary
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    case "$ARCH" in \
+        x86_64)  BINARY_ARCH="amd64" ;; \
+        aarch64) BINARY_ARCH="arm64" ;; \
+        armv7l)  BINARY_ARCH="arm" ;; \
+        *)       echo "Unsupported architecture: $ARCH"; exit 1 ;; \
+    esac; \
+    \
+    if [ "$VERSION" = "latest" ]; then \
+        echo "Fetching latest release version..."; \
+        VERSION=$(curl -sL "https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest" | jq -r '.tag_name'); \
+        echo "Latest version: $VERSION"; \
+    fi; \
+    \
+    DOWNLOAD_URL="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${VERSION}/picoclaw-linux-${BINARY_ARCH}"; \
+    echo "Downloading PicoClaw ${VERSION} for linux-${BINARY_ARCH}..."; \
+    echo "URL: ${DOWNLOAD_URL}"; \
+    \
+    curl -L --progress-bar -o /usr/local/bin/picoclaw "${DOWNLOAD_URL}"; \
+    chmod +x /usr/local/bin/picoclaw; \
+    \
+    # Verify binary works
+    /usr/local/bin/picoclaw version || { \
+        echo "ERROR: Binary verification failed"; \
+        exit 1; \
+    }; \
+    \
+    echo "PicoClaw ${VERSION} installed successfully for linux-${BINARY_ARCH}"
 
 # Switch to non-root user
 USER picoclaw

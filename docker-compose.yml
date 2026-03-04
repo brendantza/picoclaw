@@ -2,12 +2,15 @@
 # PicoClaw Docker Compose with Kimi 2.5 Support
 # ============================================================
 # 
+# This uses the pre-built release binary from GitHub releases.
+# No compilation needed - just downloads the binary.
+#
 # Usage:
-#   # Build from source (Dockerfile)
+#   # Use latest release
 #   docker-compose up -d
 #
-#   # OR use pre-built release (Dockerfile.release)
-#   docker-compose -f docker-compose.yml -f docker-compose.release.yml up -d
+#   # Use specific version
+#   PICOCLAW_VERSION=v0.3.0-kimi docker-compose up -d
 # ============================================================
 
 services:
@@ -16,7 +19,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - VERSION=${PICOCLAW_VERSION:-latest}
+        VERSION: ${PICOCLAW_VERSION:-latest}
     image: picoclaw:latest
     container_name: picoclaw
     restart: unless-stopped
