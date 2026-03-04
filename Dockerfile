@@ -13,8 +13,10 @@ RUN addgroup -g 1000 picoclaw && \
 RUN mkdir -p /home/picoclaw/.picoclaw && \
     chown -R picoclaw:picoclaw /home/picoclaw
 
-# Copy binary from build context (provided by release workflow or goreleaser)
-COPY picoclaw /usr/local/bin/picoclaw
+# Copy binary from build context
+# The binary should be pre-built and placed in the context
+ARG BINARY_PATH=picoclaw
+COPY ${BINARY_PATH} /usr/local/bin/picoclaw
 RUN chmod +x /usr/local/bin/picoclaw
 
 # Verify binary works

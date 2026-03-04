@@ -16,8 +16,11 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build binaries for all platforms
+  # ─────────────────────────────────────────────────────────────────────────────
   build-binaries:
-    name: Build Binaries
+    name: Build Binary (${{ matrix.suffix }})
     runs-on: self-hosted
     strategy:
       matrix:
@@ -48,8 +51,11 @@ jobs:
           CGO_ENABLED: 0
         run: |
           output="picoclaw-${{ matrix.suffix }}"
-          go build -ldflags="-w -s -X main.version=${{ github.ref_name }}" -o "$output" ./cmd/picoclaw
+          version="${{ github.ref_name || github.event.inputs.version }}"
+          go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw
+          echo "Built:"
           ls -la "$output"
+          file "$output"
 
       - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
@@ -58,8 +64,11 @@ jobs:
           path: picoclaw-${{ matrix.suffix }}
           retention-days: 1
 
-  release:
-    name: Create Release
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Create GitHub Release with binaries
+  # ─────────────────────────────────────────────────────────────────────────────
+  create-release:
+    name: Create GitHub Release
     needs: build-binaries
     runs-on: self-hosted
     permissions:
@@ -72,35 +81,45 @@ jobs:
       - name: 📥 Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./dist
+          path: ./artifacts
           pattern: picoclaw-*
 
-      - name: 📁 Organize Binaries
+      - name: 📁 Prepare Release Files
         run: |
           mkdir -p release
-          cp dist/*/picoclaw-* release/
+          # Copy binaries from artifacts
+          for dir in artifacts/picoclaw-*; do
+            if [ -d "$dir" ]; then
+              cp "$dir"/picoclaw-* release/
+            fi
+          done
+          # Copy install script
           cp install.sh release/
           ls -la release/
 
       - name: 🔐 Generate Checksums
         run: |
           cd release
-          sha256sum * > ../checksums.txt
+          sha256sum picoclaw-* > ../checksums.txt
           cat ../checksums.txt
 
-      - name: 🚀 Create GitHub Release
+      - name: 🚀 Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: PicoClaw ${{ github.ref_name }}
+          name: PicoClaw ${{ github.ref_name || github.event.inputs.version }}
+          tag_name: ${{ github.ref_name || github.event.inputs.version }}
           files: |
             release/*
             checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build and push Docker images (per platform)
+  # ─────────────────────────────────────────────────────────────────────────────
   build-docker:
-    name: Build Docker Images
-    needs: build-binaries
+    name: Docker (${{ matrix.platform }})
+    needs: create-release
     runs-on: self-hosted
     permissions:
       contents: read
@@ -108,10 +127,11 @@ jobs:
 
     strategy:
       matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
-          - linux/arm/v7
+        include:
+          - platform: linux/amd64
+            artifact: linux-amd64
+          - platform: linux/arm64
+            artifact: linux-arm64
 
     steps:
       - name: 📥 Checkout
@@ -120,17 +140,15 @@ jobs:
       - name: 📥 Download Binary
         uses: actions/download-artifact@v4
         with:
-          name: picoclaw-${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || matrix.platform == 'linux/arm64' && 'linux-arm64' || 'linux-arm' }}
+          name: picoclaw-${{ matrix.artifact }}
           path: ./
 
       - name: 🏗️ Prepare Binary
         run: |
-          mv picoclaw-* picoclaw
+          mv picoclaw-${{ matrix.artifact }} picoclaw
           chmod +x picoclaw
           ls -la picoclaw
-
-      - name: 🔧 Set up QEMU
-        uses: docker/setup-qemu-action@v3
+          file picoclaw
 
       - name: 🔧 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -142,30 +160,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🏷️ Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: 🚀 Build and push by digest
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: ${{ matrix.platform }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: 📋 Export digest
+      - name: 🚀 Build and push (${{ matrix.platform }})
         run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
+          version="${{ github.ref_name || github.event.inputs.version }}"
+          platform="${{ matrix.platform }}"
+          arch="${{ matrix.artifact }}"
+          
+          # Build and push with platform-specific tag
+          docker buildx build \
+            --platform "${platform}" \
+            --build-arg BINARY_PATH=picoclaw \
+            -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-${arch}" \
+            --push \
+            .
+          
+          echo "✅ Pushed: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-${arch}"
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Merge platform-specific images into multi-arch manifest
+  # ─────────────────────────────────────────────────────────────────────────────
   merge-docker:
     name: Merge Docker Manifests
     needs: build-docker
@@ -185,28 +198,45 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🏷️ Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
-
-      - name: 📥 Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/digests
-          pattern: digests-*
-
-      - name: 🔗 Create manifest list and push
-        working-directory: /tmp/digests
+      - name: 🔗 Create Multi-Arch Manifest
         run: |
+          version="${{ github.ref_name || github.event.inputs.version }}"
+          repo="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          
+          # Build manifest list from available platforms
+          manifests=""
+          for arch in linux-amd64 linux-arm64; do
+            tag="${version}-${arch}"
+            echo "Checking ${repo}:${tag}..."
+            if docker manifest inspect "${repo}:${tag}" > /dev/null 2>&1; then
+              echo "  ✓ Found"
+              manifests="${manifests} ${repo}:${tag}"
+            else
+              echo "  ✗ Not found"
+            fi
+          done
+          
+          if [ -z "$manifests" ]; then
+            echo "❌ No manifests found!"
+            exit 1
+          fi
+          
+          echo ""
+          echo "Creating multi-arch manifest..."
           docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+            -t "${repo}:${version}" \
+            -t "${repo}:latest" \
+            ${manifests}
+          
+          echo ""
+          echo "✅ Multi-arch image created:"
+          echo "  - ${repo}:${version}"
+          echo "  - ${repo}:latest"
 
-      - name: 📋 Inspect image
+      - name: 📋 Verify Manifest
         run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          repo="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          version="${{ github.ref_name || github.event.inputs.version }}"
+          
+          echo "Inspecting ${repo}:${version}..."
+          docker buildx imagetools inspect "${repo}:${version}"
