@@ -3,7 +3,7 @@ FROM alpine:3.21
 ARG TARGETPLATFORM
 ARG TARGETARCH
 
-RUN apk add --no-cache ca-certificates tzdata curl jq
+RUN apk add --no-cache ca-certificates tzdata curl jq su-exec
 
 # Create non-root user
 RUN addgroup -g 1000 picoclaw && \
@@ -20,9 +20,9 @@ RUN chmod +x /usr/local/bin/picoclaw
 # Verify binary works
 RUN /usr/local/bin/picoclaw version
 
-# Switch to non-root user
-USER picoclaw
-WORKDIR /home/picoclaw
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set environment
 ENV PICOCLAW_HOME=/home/picoclaw/.picoclaw
@@ -35,5 +35,5 @@ EXPOSE 18790
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:18790/health || exit 1
 
-ENTRYPOINT ["picoclaw"]
-CMD ["gateway"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["su-exec", "picoclaw", "/usr/local/bin/picoclaw", "gateway"]
