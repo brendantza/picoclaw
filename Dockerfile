@@ -36,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:18790/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["su-exec", "picoclaw", "/usr/local/bin/picoclaw", "gateway"]
+CMD []

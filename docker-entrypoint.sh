@@ -90,5 +90,18 @@ else
     echo "Using existing config: $CONFIG_FILE"
 fi
 
-# Execute the main command
-exec "$@"
+# Determine what to run based on GATEWAY_ENABLED
+GATEWAY_ENABLED="${GATEWAY_ENABLED:-1}"
+
+if [ "$GATEWAY_ENABLED" = "1" ] || [ "$GATEWAY_ENABLED" = "true" ]; then
+    echo "Starting PicoClaw Gateway..."
+    exec su-exec picoclaw /usr/local/bin/picoclaw gateway
+else
+    echo "Running PicoClaw Agent..."
+    # If additional args passed, run agent with those args
+    if [ $# -gt 0 ]; then
+        exec su-exec picoclaw /usr/local/bin/picoclaw agent "$@"
+    else
+        exec su-exec picoclaw /usr/local/bin/picoclaw agent
+    fi
+fi
