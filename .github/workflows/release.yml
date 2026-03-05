@@ -47,12 +47,6 @@ jobs:
           - goos: linux
             goarch: amd64
             suffix: linux-amd64
-          - goos: linux
-            goarch: arm64
-            suffix: linux-arm64
-          - goos: linux
-            goarch: arm
-            suffix: linux-arm
 
     steps:
       - name: 📥 Checkout
@@ -175,8 +169,6 @@ jobs:
         include:
           - platform: linux/amd64
             artifact: linux-amd64
-          - platform: linux/arm64
-            artifact: linux-arm64
 
     steps:
       - name: 📥 Checkout
@@ -250,30 +242,12 @@ jobs:
           version="${{ needs.version.outputs.version }}"
           repo="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           
-          # Build manifest list from available platforms
-          manifests=""
-          for arch in linux-amd64 linux-arm64; do
-            tag="${version}-${arch}"
-            echo "Checking ${repo}:${tag}..."
-            if docker manifest inspect "${repo}:${tag}" > /dev/null 2>&1; then
-              echo "  ✓ Found"
-              manifests="${manifests} ${repo}:${tag}"
-            else
-              echo "  ✗ Not found"
-            fi
-          done
-          
-          if [ -z "$manifests" ]; then
-            echo "❌ No manifests found!"
-            exit 1
-          fi
-          
-          echo ""
-          echo "Creating multi-arch manifest..."
+          # For single platform, just tag the image
+          echo "Tagging single-platform image..."
           docker buildx imagetools create \
             -t "${repo}:${version}" \
             -t "${repo}:latest" \
-            ${manifests}
+            "${repo}:${version}-linux-amd64"
           
           echo ""
           echo "✅ Multi-arch image created:"
