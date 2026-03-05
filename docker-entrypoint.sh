@@ -104,7 +104,7 @@ case "$MODE" in
         ;;
     launcher)
         echo "Starting PicoClaw Launcher..."
-        exec su-exec picoclaw /usr/local/bin/picoclaw-launcher
+        exec su-exec picoclaw /usr/local/bin/picoclaw-launcher -public
         ;;
     shell)
         echo "Starting shell for manual configuration..."
