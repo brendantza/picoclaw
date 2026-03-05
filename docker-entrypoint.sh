@@ -90,13 +90,37 @@ else
     echo "Using existing config: $CONFIG_FILE"
 fi
 
-# Determine what to run based on GATEWAY_ENABLED
-GATEWAY_ENABLED="${GATEWAY_ENABLED:-1}"
+# Determine what to run based on MODE
+MODE="${MODE:-gateway}"
 
-if [ "$GATEWAY_ENABLED" = "1" ] || [ "$GATEWAY_ENABLED" = "true" ]; then
-    echo "Starting PicoClaw Gateway..."
-    exec su-exec picoclaw /usr/local/bin/picoclaw gateway
-else
-    echo "Running PicoClaw Onboard..."
-    exec su-exec picoclaw /usr/local/bin/picoclaw onboard
-fi
+case "$MODE" in
+    gateway)
+        echo "Starting PicoClaw Gateway..."
+        exec su-exec picoclaw /usr/local/bin/picoclaw gateway
+        ;;
+    onboard)
+        echo "Running PicoClaw Onboard..."
+        exec su-exec picoclaw /usr/local/bin/picoclaw onboard
+        ;;
+    launcher)
+        echo "Starting PicoClaw Launcher..."
+        exec su-exec picoclaw /usr/local/bin/picoclaw-launcher
+        ;;
+    shell)
+        echo "Starting shell for manual configuration..."
+        echo "You can now run: picoclaw onboard"
+        echo "Or edit config directly at: $CONFIG_FILE"
+        exec su-exec picoclaw /bin/sh
+        ;;
+    sleep)
+        echo "Container is running in sleep mode."
+        echo "You can exec into it with: docker exec -it <container> sh"
+        echo "Config location: $CONFIG_FILE"
+        exec tail -f /dev/null
+        ;;
+    *)
+        echo "Unknown MODE: $MODE"
+        echo "Valid modes: gateway, onboard, launcher, shell, sleep"
+        exit 1
+        ;;
+esac

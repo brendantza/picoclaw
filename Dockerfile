@@ -13,11 +13,12 @@ RUN addgroup -g 1000 picoclaw && \
 RUN mkdir -p /home/picoclaw/.picoclaw && \
     chown -R picoclaw:picoclaw /home/picoclaw
 
-# Copy pre-built binary from build context
+# Copy pre-built binaries from build context
 COPY picoclaw /usr/local/bin/picoclaw
-RUN chmod +x /usr/local/bin/picoclaw
+COPY picoclaw-launcher /usr/local/bin/picoclaw-launcher
+RUN chmod +x /usr/local/bin/picoclaw /usr/local/bin/picoclaw-launcher
 
-# Verify binary works
+# Verify binaries work
 RUN /usr/local/bin/picoclaw version
 
 # Copy entrypoint script

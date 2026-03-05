@@ -174,17 +174,18 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v6
 
-      - name: 📥 Download Binary
+      - name: 📥 Download Binaries
         uses: actions/download-artifact@v4
         with:
           name: binaries-${{ matrix.artifact }}
           path: ./
 
-      - name: 🏗️ Prepare Binary
+      - name: 🏗️ Prepare Binaries
         run: |
           mv picoclaw-${{ matrix.artifact }} picoclaw
-          chmod +x picoclaw
-          ls -la picoclaw
+          mv picoclaw-launcher-${{ matrix.artifact }} picoclaw-launcher
+          chmod +x picoclaw picoclaw-launcher
+          ls -la picoclaw picoclaw-launcher
           file picoclaw
 
       - name: 🔧 Set up Docker Buildx
