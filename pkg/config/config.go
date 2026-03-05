@@ -431,7 +431,7 @@ type ProvidersConfig struct {
 	Antigravity   ProviderConfig       `json:"antigravity"`
 	Qwen          ProviderConfig       `json:"qwen"`
 	Mistral       ProviderConfig       `json:"mistral"`
-	KimiCoding    ProviderConfig       `json:"kimi_coding"`
+	KimiCoding    KimiCodingProviderConfig `json:"kimi_coding"`
 }
 
 // IsEmpty checks if all provider configs are empty (no API keys or API bases set)
@@ -459,6 +459,11 @@ func (p ProvidersConfig) IsEmpty() bool {
 		p.KimiCoding.APIKey == "" && p.KimiCoding.APIBase == ""
 }
 
+// HasKimiCodingConfig checks if Kimi Coding provider is configured
+func (p ProvidersConfig) HasKimiCodingConfig() bool {
+	return p.KimiCoding.APIKey != ""
+}
+
 // MarshalJSON implements custom JSON marshaling for ProvidersConfig
 // to omit the entire section when empty
 func (p ProvidersConfig) MarshalJSON() ([]byte, error) {
@@ -481,6 +486,14 @@ type ProviderConfig struct {
 type OpenAIProviderConfig struct {
 	ProviderConfig
 	WebSearch bool `json:"web_search" env:"PICOCLAW_PROVIDERS_OPENAI_WEB_SEARCH"`
+}
+
+// KimiCodingProviderConfig for Kimi Coding (uses Anthropic Messages API format)
+type KimiCodingProviderConfig struct {
+	APIKey         string `json:"api_key"                   env:"PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY"`
+	APIBase        string `json:"api_base"                  env:"PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE"`
+	Proxy          string `json:"proxy,omitempty"           env:"PICOCLAW_PROVIDERS_KIMI_CODING_PROXY"`
+	RequestTimeout int    `json:"request_timeout,omitempty" env:"PICOCLAW_PROVIDERS_KIMI_CODING_REQUEST_TIMEOUT"`
 }
 
 // ModelConfig represents a model-centric provider configuration.
