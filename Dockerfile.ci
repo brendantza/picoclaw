@@ -4,7 +4,10 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates tzdata
+# Allow Go toolchain to download newer version if needed
+ENV GOTOOLCHAIN=auto
+
+RUN apk add --no-cache git ca-certificates tzdata curl
 
 WORKDIR /build
 
