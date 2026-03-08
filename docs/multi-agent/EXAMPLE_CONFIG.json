@@ -1,0 +1,184 @@
+{
+  "_comment": "Example multi-agent configuration for software development team",
+  
+  "agents": {
+    "defaults": {
+      "workspace": "~/.picoclaw/workspace",
+      "model_name": "kimi-coding",
+      "max_tokens": 4096,
+      "max_tool_iterations": 10
+    },
+    
+    "list": [
+      {
+        "id": "dev-lead",
+        "name": "Development Team Lead",
+        "default": true,
+        "role": "controller",
+        "model": {
+          "primary": "kimi-coding"
+        },
+        "system_prompt": "You are a technical lead managing a development team. Your role is to:\n1. Analyze user requirements and break them into tasks\n2. Delegate tasks to specialized team members\n3. Coordinate between frontend, backend, QA, and DevOps\n4. Review and integrate work from all team members\n5. Report progress and final results to the user\n\nWhen delegating tasks, use the discover_agents tool to find available team members, then use send_agent_message or delegate_task to assign work. Always track task progress and aggregate results before presenting to the user.",
+        "skills": ["orchestration", "planning", "architecture"],
+        "multi_agent": {
+          "enabled": true,
+          "discovery_method": "static",
+          "coordination_strategy": "parallel",
+          "max_workers": 4,
+          "workers": ["frontend-dev", "backend-dev", "qa-engineer", "devops"]
+        }
+      },
+      
+      {
+        "id": "frontend-dev",
+        "name": "Frontend Developer",
+        "role": "worker",
+        "workspace": "~/.picoclaw/workspace-frontend",
+        "model": {
+          "primary": "kimi-coding"
+        },
+        "system_prompt": "You are a frontend developer specializing in React, Vue.js, and modern CSS. Your responsibilities:\n1. Build user interfaces and components\n2. Implement responsive designs\n3. Handle client-side state management\n4. Ensure accessibility and performance\n\nYou have access to file tools in your workspace. Report task completion with clear summaries of what was built.",
+        "skills": ["react", "vue", "typescript", "css", "html", "javascript"],
+        "capabilities": {
+          "can_handle": [
+            "ui_components",
+            "responsive_design", 
+            "frontend_state_management",
+            "css_styling",
+            "html_templates"
+          ],
+          "max_concurrent_tasks": 2
+        },
+        "tools": ["read_file", "write_file", "edit_file", "list_dir", "exec"]
+      },
+      
+      {
+        "id": "backend-dev",
+        "name": "Backend Developer",
+        "role": "worker",
+        "workspace": "~/.picoclaw/workspace-backend",
+        "model": {
+          "primary": "kimi-coding"
+        },
+        "system_prompt": "You are a backend developer specializing in Go, Python, and database design. Your responsibilities:\n1. Design and implement APIs\n2. Create database schemas and queries\n3. Implement business logic\n4. Ensure security and performance\n\nYou have access to file tools and exec for running code. Report task completion with API documentation and usage examples.",
+        "skills": ["go", "python", "postgresql", "redis", "api_design", "sql"],
+        "capabilities": {
+          "can_handle": [
+            "api_endpoints",
+            "database_schema",
+            "business_logic",
+            "authentication",
+            "data_validation"
+          ],
+          "max_concurrent_tasks": 3
+        },
+        "tools": ["read_file", "write_file", "edit_file", "list_dir", "exec", "web_search"]
+      },
+      
+      {
+        "id": "qa-engineer",
+        "name": "QA Engineer",
+        "role": "worker",
+        "workspace": "~/.picoclaw/workspace-qa",
+        "model": {
+          "primary": "kimi-coding"
+        },
+        "system_prompt": "You are a QA engineer focused on test automation and quality assurance. Your responsibilities:\n1. Write unit and integration tests\n2. Create end-to-end test scenarios\n3. Perform code reviews for test coverage\n4. Report bugs with reproduction steps\n\nUse the exec tool to run tests. Report coverage metrics and any issues found.",
+        "skills": ["testing", "cypress", "jest", "pytest", "go_test", "selenium"],
+        "capabilities": {
+          "can_handle": [
+            "unit_tests",
+            "integration_tests",
+            "e2e_tests",
+            "test_automation",
+            "bug_reports"
+          ],
+          "max_concurrent_tasks": 2
+        },
+        "tools": ["read_file", "write_file", "edit_file", "list_dir", "exec"]
+      },
+      
+      {
+        "id": "devops",
+        "name": "DevOps Engineer",
+        "role": "worker",
+        "workspace": "~/.picoclaw/workspace-devops",
+        "model": {
+          "primary": "kimi-coding"
+        },
+        "system_prompt": "You are a DevOps engineer specializing in Kubernetes, Docker, and CI/CD pipelines. Your responsibilities:\n1. Create Dockerfiles and docker-compose configs\n2. Write Kubernetes manifests\n3. Set up CI/CD pipelines\n4. Configure monitoring and logging\n\nUse exec to validate configurations. Provide deployment instructions with each task.",
+        "skills": ["kubernetes", "docker", "github_actions", "terraform", "helm", "nginx"],
+        "capabilities": {
+          "can_handle": [
+            "docker_containers",
+            "kubernetes_manifests",
+            "ci_cd_pipelines",
+            "infrastructure_as_code",
+            "deployment_configs"
+          ],
+          "max_concurrent_tasks": 2
+        },
+        "tools": ["read_file", "write_file", "edit_file", "list_dir", "exec", "web_search"]
+      }
+    ]
+  },
+  
+  "bindings": [
+    {
+      "agent_id": "dev-lead",
+      "match": {
+        "channel": "cli"
+      }
+    }
+  ],
+  
+  "model_list": [
+    {
+      "model_name": "kimi-coding",
+      "model": "kimi-coding/kimi-model",
+      "api_key": "YOUR_KIMI_API_KEY_HERE",
+      "api_base": "https://api.kimi.com/coding",
+      "request_timeout": 120
+    }
+  ],
+  
+  "channels": {
+    "telegram": {
+      "enabled": false
+    },
+    "discord": {
+      "enabled": false
+    },
+    "whatsapp": {
+      "enabled": false
+    }
+  },
+  
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790
+  },
+  
+  "tools": {
+    "web": {
+      "brave": {
+        "enabled": false
+      },
+      "duckduckgo": {
+        "enabled": true,
+        "max_results": 5
+      }
+    },
+    "skills": {
+      "registries": {
+        "clawhub": {
+          "enabled": true,
+          "base_url": "https://clawhub.ai"
+        }
+      }
+    },
+    "mcp": {
+      "enabled": false
+    }
+  }
+}
