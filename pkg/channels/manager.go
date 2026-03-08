@@ -324,6 +324,14 @@ func (m *Manager) SetupHTTPServer(addr string, healthServer *health.Server) {
 	}
 }
 
+// RegisterOnMux registers additional handlers on the manager's HTTP mux.
+// This is used to add team API endpoints to the gateway's HTTP server.
+func (m *Manager) RegisterOnMux(registerFunc func(mux *http.ServeMux)) {
+	if m.mux != nil {
+		registerFunc(m.mux)
+	}
+}
+
 func (m *Manager) StartAll(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

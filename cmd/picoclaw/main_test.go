@@ -41,6 +41,7 @@ func TestNewPicoclawCommand(t *testing.T) {
 		"onboard",
 		"skills",
 		"status",
+		"team",
 		"version",
 	}
 

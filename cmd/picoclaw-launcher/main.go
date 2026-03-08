@@ -1,7 +1,7 @@
 // PicoClaw Launcher - Standalone HTTP service
 //
 // Provides a web-based JSON editor for picoclaw config files,
-// with OAuth provider authentication support.
+// with OAuth provider authentication support and team management.
 //
 // Usage:
 //
@@ -20,11 +20,16 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/sipeed/picoclaw/cmd/picoclaw-launcher/internal/server"
+	"github.com/sipeed/picoclaw/pkg/discovery"
+	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/teams"
 )
 
 //go:embed internal/ui/index.html
@@ -32,6 +37,7 @@ var staticFiles embed.FS
 
 func main() {
 	public := flag.Bool("public", false, "Listen on all interfaces (0.0.0.0) instead of localhost only")
+	noMDNS := flag.Bool("no-mdns", false, "Disable mDNS advertisement for teams")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "PicoClaw Launcher - A web-based configuration editor\n\n")
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] [config.json]\n\n", os.Args[0])
@@ -60,6 +66,13 @@ func main() {
 		log.Fatalf("Failed to resolve config path: %v", err)
 	}
 
+	// Initialize team service
+	teamsStoragePath := server.DefaultTeamsStoragePath()
+	teamService, err := teams.NewService(teamsStoragePath)
+	if err != nil {
+		log.Fatalf("Failed to initialize team service: %v", err)
+	}
+
 	var addr string
 	if *public {
 		addr = "0.0.0.0:" + server.DefaultPort
@@ -71,6 +84,7 @@ func main() {
 	server.RegisterConfigAPI(mux, absPath)
 	server.RegisterAuthAPI(mux, absPath)
 	server.RegisterProcessAPI(mux, absPath)
+	server.RegisterTeamsAPI(mux, teamService)
 
 	staticFS, err := fs.Sub(staticFiles, "internal/ui")
 	if err != nil {
@@ -78,12 +92,23 @@ func main() {
 	}
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
+	// Start mDNS discovery for teams if enabled
+	var mdnsServer *discovery.Server
+	if !*noMDNS {
+		mdnsServer = startMDNSForTeams(teamService)
+	}
+
 	// Print startup banner
 	fmt.Println("=============================================")
 	fmt.Println("  PicoClaw Launcher")
 	fmt.Println("=============================================")
 	fmt.Printf("  Config file : %s\n", absPath)
-	fmt.Printf("  Listen addr : %s\n\n", addr)
+	fmt.Printf("  Teams store : %s\n", teamsStoragePath)
+	fmt.Printf("  Listen addr : %s\n", addr)
+	if mdnsServer != nil {
+		fmt.Println("  mDNS        : Enabled (_picoclaw._tcp)")
+	}
+	fmt.Println()
 	fmt.Println("  Open the following URL in your browser")
 	fmt.Println("  to view and edit the configuration:")
 	fmt.Println()
@@ -105,6 +130,19 @@ func main() {
 		}
 	}()
 
+	// Setup graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Println("\n\nShutting down...")
+		if mdnsServer != nil {
+			mdnsServer.Stop()
+		}
+		os.Exit(0)
+	}()
+
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
@@ -124,4 +162,58 @@ func openBrowser(url string) error {
 		err = fmt.Errorf("unsupported platform")
 	}
 	return err
+}
+
+// startMDNSForTeams starts mDNS advertisement for the first active team
+func startMDNSForTeams(teamService *teams.Service) *discovery.Server {
+	// List teams and advertise the first active one
+	teamList, err := teamService.ListTeams()
+	if err != nil {
+		logger.WarnCF("launcher", "Failed to list teams for mDNS", map[string]any{"error": err})
+		return nil
+	}
+
+	// Find first active team
+	var activeTeam *teams.Team
+	for _, t := range teamList {
+		if t.Status == teams.TeamStatusActive {
+			team, err := teamService.GetTeam(t.ID)
+			if err == nil && team.Status == teams.TeamStatusActive {
+				activeTeam = team
+				break
+			}
+		}
+	}
+
+	if activeTeam == nil {
+		// No active teams, nothing to advertise
+		return nil
+	}
+
+	// Get the raw team key from metadata (needed for hash computation)
+	rawKey := activeTeam.Metadata["raw_key"]
+	if rawKey == "" {
+		// Try to use the hashed key as fallback
+		rawKey = activeTeam.TeamKey
+	}
+
+	port := 18800 // Default launcher port
+	mdnsServer, err := discovery.NewServer(rawKey, port)
+	if err != nil {
+		logger.WarnCF("launcher", "Failed to create mDNS server", map[string]any{"error": err})
+		return nil
+	}
+
+	if err := mdnsServer.Start(); err != nil {
+		logger.WarnCF("launcher", "Failed to start mDNS server", map[string]any{"error": err})
+		return nil
+	}
+
+	logger.InfoCF("launcher", "mDNS advertisement started for team",
+		map[string]any{
+			"team_id":   activeTeam.ID,
+			"team_hash": mdnsServer.GetTeamHash()[:16] + "...",
+		})
+
+	return mdnsServer
 }

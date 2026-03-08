@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,6 +38,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/media"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/state"
+	"github.com/sipeed/picoclaw/pkg/teams"
 	"github.com/sipeed/picoclaw/pkg/tools"
 	"github.com/sipeed/picoclaw/pkg/voice"
 )
@@ -178,10 +180,27 @@ func gatewayCmd(debug bool) error {
 		fmt.Println("✓ Device event service started")
 	}
 
+	// Initialize team service
+	teamsStoragePath := filepath.Join(cfg.WorkspacePath(), "..", "teams")
+	teamService, err := teams.NewService(teamsStoragePath)
+	if err != nil {
+		fmt.Printf("Warning: Failed to initialize team service: %v\n", err)
+		teamService = nil
+	} else {
+		fmt.Println("✓ Team service initialized")
+	}
+
 	// Setup shared HTTP server with health endpoints and webhook handlers
 	healthServer := health.NewServer(cfg.Gateway.Host, cfg.Gateway.Port)
 	addr := fmt.Sprintf("%s:%d", cfg.Gateway.Host, cfg.Gateway.Port)
 	channelManager.SetupHTTPServer(addr, healthServer)
+
+	// Register team API endpoints on the same mux
+	if teamService != nil {
+		channelManager.RegisterOnMux(func(mux *http.ServeMux) {
+			health.RegisterTeamsAPI(mux, teamService)
+		})
+	}
 
 	if err := channelManager.StartAll(ctx); err != nil {
 		fmt.Printf("Error starting channels: %v\n", err)

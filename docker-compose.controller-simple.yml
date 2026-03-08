@@ -1,42 +1,40 @@
-# PicoClaw Controller Node - Launcher + Gateway with Teams
+# PicoClaw Controller Node - Single Service (Simpler Setup)
+# This runs just the gateway with team management API enabled
 #
-# This runs the launcher which provides:
-# - Web UI for configuration and team management (port 18800)
-# - Start/Stop button to launch gateway subprocess (port 18790)
-# - Team API available when gateway is running
+# The gateway now includes team management capabilities.
+# Access the team UI via: http://your-host:18790/teams
 #
 # Usage:
-#   docker compose up -d
-#   # Then open http://localhost:18800 and click "Start" to launch gateway
+#   docker compose -f docker-compose.controller-simple.yml up -d
 
 services:
   picoclaw:
     image: '${PICOCLAW_IMAGE:-ghcr.io/brendantza/picoclaw:latest}'
     container_name: picoclaw
     restart: unless-stopped
-    command: ["picoclaw-launcher", "-public", "/home/picoclaw/.picoclaw/config.json"]
     ports:
-      - '18800:18800'  # Launcher Web UI (Teams, Config, Logs)
-      - '18790:18790'  # Gateway API (Agents connect here)
+      - '18790:18800'  # Gateway + Team API
     environment:
       - PICOCLAW_HOME=/home/picoclaw/.picoclaw
       - 'PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=${PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME:-kimi-k2.5}'
       - 'PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=${PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY:-}'
       - 'PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE=${PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE:-https://api.kimi.com/coding}'
       - 'PICOCLAW_PROVIDERS_KIMI_CODING_PROXY=${PICOCLAW_PROVIDERS_KIMI_CODING_PROXY:-}'
-      # Team configuration (optional - for this node to also act as an agent)
+      # Team configuration (optional - for auto-joining on startup as an agent)
       - 'PICOCLAW_TEAM_ID=${PICOCLAW_TEAM_ID:-}'
       - 'PICOCLAW_AGENT_ROLE=${PICOCLAW_AGENT_ROLE:-worker}'
       - 'PICOCLAW_TEAM_KEY=${PICOCLAW_TEAM_KEY:-}'
+      - 'PICOCLAW_GATEWAY_ADDRESS=${PICOCLAW_GATEWAY_ADDRESS:-http://localhost:18790}'
       - 'TZ=${TZ:-America/New_York}'
     volumes:
       - 'picoclaw-data:/home/picoclaw/.picoclaw'
+      # Team data is stored within the main data volume
     healthcheck:
       test:
         - CMD
         - wget
         - '-qO-'
-        - 'http://localhost:18800/api/config'
+        - 'http://localhost:18800/health'
       interval: 30s
       timeout: 5s
       retries: 3

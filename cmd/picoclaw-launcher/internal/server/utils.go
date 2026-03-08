@@ -14,6 +14,14 @@ func DefaultConfigPath() string {
 	return filepath.Join(home, ".picoclaw", "config.json")
 }
 
+func DefaultTeamsStoragePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "teams"
+	}
+	return filepath.Join(home, ".picoclaw", "teams")
+}
+
 func GetLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {

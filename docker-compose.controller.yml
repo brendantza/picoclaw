@@ -1,0 +1,97 @@
+# PicoClaw Controller Node - Docker Compose
+# This configuration runs the gateway with team management capabilities
+#
+# Usage:
+#   docker compose -f docker-compose.controller.yml up -d
+#
+# Environment variables to set in .env file:
+#   PICOCLAW_IMAGE=ghcr.io/brendantza/picoclaw:latest
+#   PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=kimi-k2.5
+#   PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=sk-...
+#   PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE=https://api.kimi.com/coding
+#   PICOCLAW_TEAM_ID=my-team                    # Optional: auto-join team on startup
+#   PICOCLAW_AGENT_ROLE=worker                  # Optional: role when joining team
+#   PICOCLAW_TEAM_KEY=pk_team_...               # Optional: team key for auto-join
+
+services:
+  # Main PicoClaw Gateway - handles agent operations, channels, cron
+  picoclaw:
+    image: '${PICOCLAW_IMAGE:-ghcr.io/brendantza/picoclaw:latest}'
+    container_name: picoclaw
+    restart: unless-stopped
+    ports:
+      - '18790:18800'  # Gateway API and health check
+    environment:
+      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
+      - 'PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=${PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME:-kimi-k2.5}'
+      - 'PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=${PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY:-}'
+      - 'PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE=${PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE:-https://api.kimi.com/coding}'
+      - 'PICOCLAW_PROVIDERS_KIMI_CODING_PROXY=${PICOCLAW_PROVIDERS_KIMI_CODING_PROXY:-}'
+      # Team configuration (optional - for auto-joining on startup)
+      - 'PICOCLAW_TEAM_ID=${PICOCLAW_TEAM_ID:-}'
+      - 'PICOCLAW_AGENT_ROLE=${PICOCLAW_AGENT_ROLE:-worker}'
+      - 'PICOCLAW_TEAM_KEY=${PICOCLAW_TEAM_KEY:-}'
+      - 'PICOCLAW_GATEWAY_ADDRESS=${PICOCLAW_GATEWAY_ADDRESS:-http://localhost:18790}'
+      - 'TZ=${TZ:-America/New_York}'
+    volumes:
+      - 'picoclaw-data:/home/picoclaw/.picoclaw'
+      # Mount for team data persistence
+      - 'picoclaw-teams:/home/picoclaw/.picoclaw/teams'
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '-qO-'
+        - 'http://localhost:18800/health'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - picoclaw-network
+
+  # PicoClaw Launcher - Web UI for team management and configuration
+  # This provides the team management interface at http://localhost:18800
+  picoclaw-launcher:
+    image: '${PICOCLAW_IMAGE:-ghcr.io/brendantza/picoclaw:latest}'
+    container_name: picoclaw-launcher
+    restart: unless-stopped
+    command: ["picoclaw-launcher", "-public", "/home/picoclaw/.picoclaw/config.json"]
+    ports:
+      - '18800:18800'  # Launcher Web UI
+    environment:
+      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
+      # mDNS is disabled by default in Docker (use --no-mdns=false to enable if using host network)
+      - 'TZ=${TZ:-America/New_York}'
+    volumes:
+      - 'picoclaw-data:/home/picoclaw/.picoclaw'
+      - 'picoclaw-teams:/home/picoclaw/.picoclaw/teams'
+    # The launcher needs to share the same config as the gateway
+    depends_on:
+      picoclaw:
+        condition: service_healthy
+    networks:
+      - picoclaw-network
+    profiles:
+      - launcher  # Only start when explicitly requested: docker compose --profile launcher up -d
+
+  # Optional: mDNS reflector for team discovery across Docker network
+  # This allows agents on the host network to discover the team gateway
+  mdns-reflector:
+    image: 'yuxzhu/mdns-reflector:latest'
+    container_name: picoclaw-mdns
+    restart: unless-stopped
+    network_mode: host  # Required for mDNS
+    command: ["mdns-reflector", "-fb", "eth0", "docker0"]
+    profiles:
+      - mdns  # Only start when explicitly requested: docker compose --profile mdns up -d
+
+networks:
+  picoclaw-network:
+    driver: bridge
+
+volumes:
+  picoclaw-data:
+    driver: local
+  picoclaw-teams:
+    driver: local
