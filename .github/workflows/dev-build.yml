@@ -24,6 +24,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Run go generate
+        run: go generate ./...
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
