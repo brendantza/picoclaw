@@ -1,410 +1,116 @@
-name: 🚀 Build Release & Docker Image
+name: Create Tag and Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version tag (e.g., v0.3.0)'
+      tag:
+        description: "Release tag (required, e.g. v0.2.0)"
         required: true
-        default: 'v0.3.0'
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: "Create as draft"
+        required: false
+        type: boolean
+        default: false
+      upload_tos:
+        description: "Upload to Volcengine TOS"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Determine version to use
-  # ─────────────────────────────────────────────────────────────────────────────
-  version:
-    name: Determine Version
-    runs-on: self-hosted
-    outputs:
-      version: ${{ steps.get-version.outputs.version }}
-    steps:
-      - name: Get version
-        id: get-version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          fi
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Build binaries for all platforms
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-binaries:
-    name: Build (${{ matrix.suffix }})
-    needs: version
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            suffix: linux-amd64
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v6
-
-      - name: 🔧 Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-
-      - name: 📝 Run go generate
-        run: go generate ./...
-
-      - name: 🏗️ Build picoclaw
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          output="picoclaw-${{ matrix.suffix }}"
-          version="${{ needs.version.outputs.version }}"
-          go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw
-          echo "Built picoclaw:"
-          ls -la "$output"
-          file "$output"
-
-      - name: 🏗️ Build picoclaw-launcher
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          output="picoclaw-launcher-${{ matrix.suffix }}"
-          version="${{ needs.version.outputs.version }}"
-          go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw-launcher
-          echo "Built picoclaw-launcher:"
-          ls -la "$output"
-          file "$output"
-
-      - name: 🏗️ Build picoclaw-launcher-tui
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          output="picoclaw-launcher-tui-${{ matrix.suffix }}"
-          version="${{ needs.version.outputs.version }}"
-          go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw-launcher-tui
-          echo "Built picoclaw-launcher-tui:"
-          ls -la "$output"
-          file "$output"
-
-      - name: 📤 Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries-${{ matrix.suffix }}
-          path: |
-            picoclaw-${{ matrix.suffix }}
-            picoclaw-launcher-${{ matrix.suffix }}
-            picoclaw-launcher-tui-${{ matrix.suffix }}
-          retention-days: 1
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Build binaries with WhatsApp native support
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-binaries-whatsapp:
-    name: Build WhatsApp Native (${{ matrix.suffix }})
-    needs: version
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            suffix: linux-amd64
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v6
-
-      - name: 🔧 Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-
-      - name: 📝 Run go generate
-        run: go generate ./...
-
-      - name: 🏗️ Build picoclaw with WhatsApp native
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          output="picoclaw-whatsapp-${{ matrix.suffix }}"
-          version="${{ needs.version.outputs.version }}"
-          go build -tags whatsapp_native -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw
-          echo "Built picoclaw with WhatsApp native:"
-          ls -la "$output"
-          file "$output"
-
-      - name: 🏗️ Build picoclaw-launcher
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          output="picoclaw-launcher-${{ matrix.suffix }}"
-          version="${{ needs.version.outputs.version }}"
-          go build -ldflags="-w -s -X main.version=${version}" -o "$output" ./cmd/picoclaw-launcher
-          echo "Built picoclaw-launcher:"
-          ls -la "$output"
-          file "$output"
-
-      - name: 📤 Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries-whatsapp-${{ matrix.suffix }}
-          path: |
-            picoclaw-whatsapp-${{ matrix.suffix }}
-            picoclaw-launcher-${{ matrix.suffix }}
-          retention-days: 1
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Create GitHub Release with binaries
-  # ─────────────────────────────────────────────────────────────────────────────
-  create-release:
-    name: Create GitHub Release
-    needs: [version, build-binaries, build-binaries-whatsapp]
-    runs-on: self-hosted
+  create-tag:
+    name: Create Git Tag
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v6
-
-      - name: 📥 Download All Artifacts
-        uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
-          pattern: binaries-*
+          fetch-depth: 0
 
-      - name: 📁 Prepare Release Files
+      - name: Create and push tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          mkdir -p release
-          # Copy all binaries from artifacts (standard and WhatsApp native)
-          for dir in artifacts/binaries-*/; do
-            if [ -d "$dir" ]; then
-              cp "$dir"/picoclaw-* release/ 2>/dev/null || true
-            fi
-          done
-          # Rename WhatsApp native binary for clarity
-          if [ -f "release/picoclaw-whatsapp-linux-amd64" ]; then
-            cp "release/picoclaw-whatsapp-linux-amd64" "release/picoclaw-linux-amd64-whatsapp-native"
-          fi
-          # Copy install script and README
-          cp install.sh release/
-          cp README.md release/
-          echo "Release files:"
-          ls -la release/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
 
-      - name: 🚀 Create/Update GitHub Release
-        uses: softprops/action-gh-release@v2
+  release:
+    name: GoReleaser Release
+    needs: create-tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v6
         with:
-          name: PicoClaw ${{ needs.version.outputs.version }}
-          tag_name: ${{ needs.version.outputs.version }}
-          files: release/*
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+
+      - name: Setup Go from go.mod
+        id: setup-go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: ~> v2
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          DOCKERHUB_IMAGE_NAME: ${{ vars.DOCKERHUB_REPOSITORY }}
+          GOVERSION: ${{ steps.setup-go.outputs.go-version }}
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Build and push Docker images
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-docker:
-    name: Docker (${{ matrix.platform }})
-    needs: [version, create-release]
-    runs-on: self-hosted
-    permissions:
-      contents: read
-      packages: write
-
-    strategy:
-      matrix:
-        include:
-          - platform: linux/amd64
-            artifact: linux-amd64
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v6
-
-      - name: 📥 Download Binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries-${{ matrix.artifact }}
-          path: ./
-
-      - name: 🏗️ Prepare Binaries
+      - name: Apply release flags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mv picoclaw-${{ matrix.artifact }} picoclaw
-          mv picoclaw-launcher-${{ matrix.artifact }} picoclaw-launcher
-          chmod +x picoclaw picoclaw-launcher
-          ls -la picoclaw picoclaw-launcher
-          file picoclaw
+          gh release edit "${{ inputs.tag }}" \
+            --draft=${{ inputs.draft }} \
+            --prerelease=${{ inputs.prerelease }}
 
-      - name: 🔧 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 🔑 Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🚀 Build and push (${{ matrix.platform }})
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          platform="${{ matrix.platform }}"
-          arch="${{ matrix.artifact }}"
-          
-          echo "Building for ${platform}..."
-          echo "Tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-${arch}"
-          
-          # Build and push
-          docker buildx build \
-            --platform "${platform}" \
-            -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-${arch}" \
-            --push \
-            .
-          
-          echo "✅ Pushed: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-${arch}"
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Build and push Docker images with WhatsApp native support
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-docker-whatsapp:
-    name: Docker WhatsApp Native (${{ matrix.platform }})
-    needs: [version, create-release]
-    runs-on: self-hosted
-    permissions:
-      contents: read
-      packages: write
-
-    strategy:
-      matrix:
-        include:
-          - platform: linux/amd64
-            artifact: linux-amd64
-
-    steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v6
-
-      - name: 📥 Download Binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries-whatsapp-${{ matrix.artifact }}
-          path: ./
-
-      - name: 🏗️ Prepare Binaries
-        run: |
-          mv picoclaw-whatsapp-${{ matrix.artifact }} picoclaw
-          mv picoclaw-launcher-${{ matrix.artifact }} picoclaw-launcher
-          chmod +x picoclaw picoclaw-launcher
-          ls -la picoclaw picoclaw-launcher
-          file picoclaw
-
-      - name: 🔧 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 🔑 Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🚀 Build and push WhatsApp Native (${{ matrix.platform }})
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          platform="${{ matrix.platform }}"
-          arch="${{ matrix.artifact }}"
-          
-          echo "Building WhatsApp Native for ${platform}..."
-          echo "Tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-whatsapp-${arch}"
-          
-          # Build and push
-          docker buildx build \
-            --platform "${platform}" \
-            -t "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-whatsapp-${arch}" \
-            --push \
-            .
-          
-          echo "✅ Pushed: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-whatsapp-${arch}"
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Merge platform-specific images into multi-arch manifest
-  # ─────────────────────────────────────────────────────────────────────────-----
-  merge-docker:
-    name: Merge Docker Manifests
-    needs: [version, build-docker, build-docker-whatsapp]
-    runs-on: self-hosted
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: 🔧 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 🔑 Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🔗 Create Multi-Arch Manifest
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          repo="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          
-          # For single platform, just tag the image
-          echo "Tagging single-platform image..."
-          docker buildx imagetools create \
-            -t "${repo}:${version}" \
-            -t "${repo}:latest" \
-            "${repo}:${version}-linux-amd64"
-          
-          echo ""
-          echo "✅ Multi-arch image created:"
-          echo "  - ${repo}:${version}"
-          echo "  - ${repo}:latest"
-
-      - name: 🔗 Create WhatsApp Native Manifest
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          repo="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          
-          # For single platform, just tag the image
-          echo "Tagging WhatsApp Native image..."
-          docker buildx imagetools create \
-            -t "${repo}:${version}-whatsapp" \
-            -t "${repo}:latest-whatsapp" \
-            "${repo}:${version}-whatsapp-linux-amd64"
-          
-          echo ""
-          echo "✅ WhatsApp Native image created:"
-          echo "  - ${repo}:${version}-whatsapp"
-          echo "  - ${repo}:latest-whatsapp"
-
-      - name: 📋 Verify Manifests
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          echo "=== Standard Image ==="
-          docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}"
-          echo ""
-          echo "=== WhatsApp Native Image ==="
-          docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${version}-whatsapp"
+  upload-tos:
+    name: Upload to TOS
+    needs: release
+    if: ${{ inputs.upload_tos }}
+    uses: ./.github/workflows/upload-tos.yml
+    with:
+      tag: ${{ inputs.tag }}
+    secrets: inherit
