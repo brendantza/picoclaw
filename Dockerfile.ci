@@ -1,0 +1,67 @@
+# PicoClaw CI Dockerfile - Multi-stage build for linux-amd64 only
+# This is used by the dev branch CI workflow
+
+# Build stage
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Run go generate for embedded files
+RUN go generate ./...
+
+# Build binaries
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w -X github.com/sipeed/picoclaw/cmd/picoclaw/internal.version=dev" \
+    -o picoclaw ./cmd/picoclaw
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w" \
+    -o picoclaw-launcher ./cmd/picoclaw-launcher
+
+# Runtime stage
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata curl jq su-exec
+
+# Create non-root user
+RUN addgroup -g 1000 picoclaw && \
+    adduser -D -u 1000 -G picoclaw picoclaw
+
+# Create data directory
+RUN mkdir -p /home/picoclaw/.picoclaw && \
+    chown -R picoclaw:picoclaw /home/picoclaw
+
+# Copy binaries from builder
+COPY --from=builder /build/picoclaw /usr/local/bin/picoclaw
+COPY --from=builder /build/picoclaw-launcher /usr/local/bin/picoclaw-launcher
+RUN chmod +x /usr/local/bin/picoclaw /usr/local/bin/picoclaw-launcher
+
+# Verify binaries work
+RUN /usr/local/bin/picoclaw version
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Set environment
+ENV PICOCLAW_HOME=/home/picoclaw/.picoclaw
+ENV HOME=/home/picoclaw
+
+# Expose ports
+EXPOSE 18790 18800
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:18800/health || exit 1
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD []
