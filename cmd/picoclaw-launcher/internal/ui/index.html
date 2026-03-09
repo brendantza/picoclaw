@@ -2168,6 +2168,7 @@ let currentTeamId = null;
 let teamKeyVisible = false;
 
 function showCreateTeamModal() {
+    console.log('showCreateTeamModal called');
     showPanel('panelTeamCreate');
 }
 
@@ -2212,9 +2213,12 @@ function renderTeams() {
 }
 
 async function createTeam() {
+    console.log('createTeam called');
     const name = document.getElementById('teamNameInput').value.trim();
     const description = document.getElementById('teamDescInput').value.trim();
     const maxAgents = parseInt(document.getElementById('teamMaxAgentsInput').value) || 10;
+    
+    console.log('Form data:', { name, description, maxAgents });
 
     if (!name) {
         showToast(t('teams.nameRequired'), 'error');
@@ -2222,6 +2226,7 @@ async function createTeam() {
     }
 
     try {
+        console.log('Sending POST to /api/teams');
         const response = await fetch('/api/teams', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2249,6 +2254,7 @@ async function createTeam() {
         showPanel('panelTeams');
         loadTeams();
     } catch (err) {
+        console.error('createTeam error:', err);
         showToast('Error creating team: ' + err.message, 'error');
     }
 }
