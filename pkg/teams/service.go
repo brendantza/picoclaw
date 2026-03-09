@@ -52,6 +52,12 @@ func NewService(storagePath string) (*Service, error) {
 		return nil, fmt.Errorf("failed to load teams: %w", err)
 	}
 
+	// Load existing sessions
+	if err := s.loadSessions(); err != nil {
+		logger.WarnCF("teams", "Failed to load sessions", map[string]any{"error": err})
+		// Continue without sessions - agents will need to rejoin
+	}
+
 	// Start cleanup goroutine
 	go s.cleanupLoop()
 
@@ -264,6 +270,11 @@ func (s *Service) RotateTeamKey(id string) (string, error) {
 			delete(s.sessions, sessionID)
 		}
 	}
+	
+	// Save sessions to disk
+	if err := s.saveSessions(); err != nil {
+		logger.WarnCF("teams", "Failed to save sessions", map[string]any{"error": err})
+	}
 
 	// Mark all agents as needing reconnection
 	for _, agent := range team.Agents {
@@ -316,6 +327,11 @@ func (s *Service) JoinTeam(teamID string, req JoinTeamRequest, rawTeamKey string
 			CreatedAt:    time.Now().UTC(),
 			ExpiresAt:    time.Now().UTC().Add(24 * time.Hour),
 			LastActivity: time.Now().UTC(),
+		}
+
+		// Save sessions to disk
+		if err := s.saveSessions(); err != nil {
+			logger.WarnCF("teams", "Failed to save sessions", map[string]any{"error": err})
 		}
 
 		return &JoinTeamResponse{
@@ -376,6 +392,11 @@ func (s *Service) JoinTeam(teamID string, req JoinTeamRequest, rawTeamKey string
 		return nil, fmt.Errorf("failed to save team: %w", err)
 	}
 
+	// Save sessions to disk
+	if err := s.saveSessions(); err != nil {
+		logger.WarnCF("teams", "Failed to save sessions", map[string]any{"error": err})
+	}
+
 	logger.InfoCF("teams", "Agent joined team",
 		map[string]any{
 			"team_id":  teamID,
@@ -412,9 +433,18 @@ func (s *Service) EvictAgent(teamID, agentID string) error {
 			delete(s.agents, agentID)
 			
 			// Invalidate sessions
+			sessionsChanged := false
 			for sessionID, session := range s.sessions {
 				if session.AgentID == agentID {
 					delete(s.sessions, sessionID)
+					sessionsChanged = true
+				}
+			}
+
+			// Save sessions to disk if any were invalidated
+			if sessionsChanged {
+				if err := s.saveSessions(); err != nil {
+					logger.WarnCF("teams", "Failed to save sessions", map[string]any{"error": err})
 				}
 			}
 
@@ -493,6 +523,31 @@ func (s *Service) GetAgentSession(sessionID string) (*AgentSession, error) {
 	return session, nil
 }
 
+// TouchSession updates a session's last activity and extends its expiration
+func (s *Service) TouchSession(sessionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	session, exists := s.sessions[sessionID]
+	if !exists {
+		return fmt.Errorf("invalid session")
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		return fmt.Errorf("session expired")
+	}
+
+	session.LastActivity = time.Now().UTC()
+	session.ExpiresAt = time.Now().UTC().Add(24 * time.Hour)
+
+	// Save sessions to disk (async would be better here, but sync for now)
+	if err := s.saveSessions(); err != nil {
+		logger.WarnCF("teams", "Failed to save sessions", map[string]any{"error": err})
+	}
+
+	return nil
+}
+
 // Helper methods
 
 func (s *Service) findAgentInTeam(team *Team, agentID string) *Agent {
@@ -517,6 +572,11 @@ func (s *Service) loadTeams() error {
 
 	for _, file := range files {
 		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
+			continue
+		}
+
+		// Skip sessions file - handled separately
+		if file.Name() == "_sessions.json" {
 			continue
 		}
 
@@ -545,6 +605,59 @@ func (s *Service) loadTeams() error {
 		map[string]any{"count": len(s.teams)})
 
 	return nil
+}
+
+// loadSessions loads agent sessions from storage
+func (s *Service) loadSessions() error {
+	sessionFile := filepath.Join(s.storagePath, "_sessions.json")
+	data, err := os.ReadFile(sessionFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // No sessions file yet
+		}
+		return err
+	}
+
+	var sessions map[string]*AgentSession
+	if err := json.Unmarshal(data, &sessions); err != nil {
+		logger.WarnCF("teams", "Failed to parse sessions file", map[string]any{"error": err})
+		return nil // Continue without sessions
+	}
+
+	now := time.Now()
+	loadedCount := 0
+	for id, session := range sessions {
+		// Only load non-expired sessions
+		if now.Before(session.ExpiresAt) {
+			s.sessions[id] = session
+			loadedCount++
+		}
+	}
+
+	logger.InfoCF("teams", "Loaded sessions",
+		map[string]any{"count": loadedCount, "expired": len(sessions) - loadedCount})
+
+	return nil
+}
+
+// saveSessions saves agent sessions to storage
+func (s *Service) saveSessions() error {
+	if len(s.sessions) == 0 {
+		// Remove sessions file if no sessions
+		sessionFile := filepath.Join(s.storagePath, "_sessions.json")
+		if _, err := os.Stat(sessionFile); err == nil {
+			return os.Remove(sessionFile)
+		}
+		return nil
+	}
+
+	sessionFile := filepath.Join(s.storagePath, "_sessions.json")
+	data, err := json.MarshalIndent(s.sessions, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return fileutil.WriteFileAtomic(sessionFile, data, 0600)
 }
 
 func (s *Service) saveTeam(team *Team) error {
@@ -577,9 +690,18 @@ func (s *Service) cleanup() {
 	now := time.Now()
 
 	// Clean up expired sessions
+	sessionsChanged := false
 	for id, session := range s.sessions {
 		if now.After(session.ExpiresAt) {
 			delete(s.sessions, id)
+			sessionsChanged = true
+		}
+	}
+
+	// Save sessions to disk if any were cleaned up
+	if sessionsChanged {
+		if err := s.saveSessions(); err != nil {
+			logger.WarnCF("teams", "Failed to save sessions", map[string]any{"error": err})
 		}
 	}
 

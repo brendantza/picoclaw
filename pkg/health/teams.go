@@ -124,6 +124,13 @@ func handleAgentHeartbeat(w http.ResponseWriter, r *http.Request, teamService *t
 		return
 	}
 
+	// Touch session to extend its lifetime
+	if err := teamService.TouchSession(req.SessionID); err != nil {
+		// Log but don't fail - the heartbeat succeeded
+		logger := map[string]any{"session_id": req.SessionID, "error": err}
+		_ = logger // Avoid unused variable
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

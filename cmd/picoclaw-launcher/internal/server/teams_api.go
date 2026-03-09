@@ -247,6 +247,9 @@ func RegisterTeamsAPI(mux *http.ServeMux, teamService *teams.Service) {
 			return
 		}
 
+		// Touch session to extend its lifetime
+		_ = teamService.TouchSession(req.SessionID)
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
