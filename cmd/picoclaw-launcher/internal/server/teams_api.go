@@ -15,6 +15,9 @@ import (
 func RegisterTeamsAPI(mux *http.ServeMux, teamService *teams.Service) {
 	// GET /api/teams - List all teams
 	mux.HandleFunc("GET /api/teams", func(w http.ResponseWriter, r *http.Request) {
+		// Reload to pick up changes from gateway
+		_ = teamService.Reload()
+
 		teamList, err := teamService.ListTeams()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -51,6 +54,9 @@ func RegisterTeamsAPI(mux *http.ServeMux, teamService *teams.Service) {
 
 	// GET /api/teams/{id} - Get team details
 	mux.HandleFunc("GET /api/teams/{id}", func(w http.ResponseWriter, r *http.Request) {
+		// Reload to pick up changes from gateway
+		_ = teamService.Reload()
+
 		id := r.PathValue("id")
 		team, err := teamService.GetTeam(id)
 		if err != nil {
@@ -156,6 +162,9 @@ func RegisterTeamsAPI(mux *http.ServeMux, teamService *teams.Service) {
 
 	// GET /api/teams/{id}/agents - List team agents
 	mux.HandleFunc("GET /api/teams/{id}/agents", func(w http.ResponseWriter, r *http.Request) {
+		// Reload to pick up changes from gateway
+		_ = teamService.Reload()
+
 		id := r.PathValue("id")
 		team, err := teamService.GetTeam(id)
 		if err != nil {

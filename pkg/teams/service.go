@@ -525,6 +525,28 @@ func (s *Service) GetAgentSession(sessionID string) (*AgentSession, error) {
 	return session, nil
 }
 
+// Reload reloads teams from disk (for when external processes modify the files)
+func (s *Service) Reload() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Clear current data
+	s.teams = make(map[string]*Team)
+	s.agents = make(map[string]*Agent)
+
+	// Reload from disk
+	if err := s.loadTeams(); err != nil {
+		return fmt.Errorf("failed to reload teams: %w", err)
+	}
+
+	// Reload sessions
+	if err := s.loadSessions(); err != nil {
+		logger.WarnCF("teams", "Failed to reload sessions", map[string]any{"error": err})
+	}
+
+	return nil
+}
+
 // TouchSession updates a session's last activity and extends its expiration
 func (s *Service) TouchSession(sessionID string) error {
 	s.mu.Lock()
