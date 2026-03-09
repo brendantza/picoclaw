@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  picoclaw-agent:
+    image: ghcr.io/brendantza/picoclaw:dev
+    container_name: picoclaw-dev-agent
+    restart: unless-stopped
+    environment:
+      - PICOCLAW_TEAM_ID=${PICOCLAW_TEAM_ID:-Development-Team-67d82e93}
+      - PICOCLAW_TEAM_KEY=${PICOCLAW_TEAM_KEY:-pk_team_MK2-SdlgjeX0Mwt0BrkHKPY1DPs2ZJ6tj9xfkMs5NUM=}
+      - PICOCLAW_GATEWAY_ADDRESS=${PICOCLAW_GATEWAY_ADDRESS:-http://192.168.6.122:18790}
+      - PICOCLAW_AGENT_ROLE=${PICOCLAW_AGENT_ROLE:-fullstack}
+      - PICOCLAW_AGENT_ID=${PICOCLAW_AGENT_ID:-dev-agent-docker}
+    volumes:
+      - ./agent-with-heartbeat.sh:/heartbeat.sh:ro
+    command: ["sh", "/heartbeat.sh"]
+    # Optional: resource limits for lightweight deployment
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M

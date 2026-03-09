@@ -1,0 +1,38 @@
+# PicoClaw Controller - Gateway with Team Management Only
+# This runs the gateway which includes team management APIs
+# Access: http://your-host:18790/teams (team UI) or http://your-host:18790 (gateway)
+#
+# Usage:
+#   docker compose -f docker-compose.controller-team.yml up -d
+
+services:
+  picoclaw-controller:
+    image: '${PICOCLAW_IMAGE:-ghcr.io/brendantza/picoclaw:dev}'
+    container_name: picoclaw-controller
+    restart: unless-stopped
+    ports:
+      - '18790:18800'  # Gateway + Team API + Web UI
+    environment:
+      - MODE=gateway
+      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
+      - 'PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=${PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME:-kimi-k2.5}'
+      - 'PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=${PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY:-}'
+      - 'PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE=${PICOCLAW_PROVIDERS_KIMI_CODING_API_BASE:-https://api.kimi.com/coding}'
+      - 'PICOCLAW_PROVIDERS_KIMI_CODING_PROXY=${PICOCLAW_PROVIDERS_KIMI_CODING_PROXY:-}'
+      - 'TZ=${TZ:-America/New_York}'
+    volumes:
+      - 'picoclaw-controller-data:/home/picoclaw/.picoclaw'
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - '-qO-'
+        - 'http://localhost:18800/health'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  picoclaw-controller-data:
+    driver: local

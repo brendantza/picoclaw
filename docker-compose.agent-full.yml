@@ -1,0 +1,49 @@
+version: '3.8'
+
+# Full agent setup with launcher UI + team heartbeat
+# The launcher provides local web UI for configuration
+# The heartbeat keeps agent registered with controller
+
+services:
+  # Launcher - provides web UI for local agent management
+  picoclaw-launcher:
+    image: ghcr.io/brendantza/picoclaw:dev
+    container_name: picoclaw-agent-launcher
+    restart: unless-stopped
+    environment:
+      - MODE=launcher
+      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
+      # Optional: Pre-configure API key
+      - PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=${PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY:-}
+    ports:
+      - '18801:18800'  # Access launcher at http://localhost:18801
+    volumes:
+      - picoclaw-agent-data:/home/picoclaw/.picoclaw
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:18800/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Heartbeat service - keeps agent registered with controller
+  picoclaw-heartbeat:
+    image: ghcr.io/brendantza/picoclaw:dev
+    container_name: picoclaw-agent-heartbeat
+    restart: unless-stopped
+    # Run heartbeat script
+    entrypoint: ["/bin/sh"]
+    command: ["/heartbeat.sh"]
+    environment:
+      - PICOCLAW_TEAM_ID=${PICOCLAW_TEAM_ID:-Development-Team-67d82e93}
+      - PICOCLAW_TEAM_KEY=${PICOCLAW_TEAM_KEY:-pk_team_MK2-SdlgjeX0Mwt0BrkHKPY1DPs2ZJ6tj9xfkMs5NUM=}
+      - PICOCLAW_GATEWAY_ADDRESS=${PICOCLAW_GATEWAY_ADDRESS:-http://192.168.6.122:18790}
+      - PICOCLAW_AGENT_ROLE=${PICOCLAW_AGENT_ROLE:-fullstack}
+      - PICOCLAW_AGENT_ID=${PICOCLAW_AGENT_ID:-dev-agent-docker}
+    volumes:
+      - ./agent-with-heartbeat.sh:/heartbeat.sh:ro
+      - picoclaw-agent-data:/home/picoclaw/.picoclaw
+    depends_on:
+      - picoclaw-launcher
+
+volumes:
+  picoclaw-agent-data:

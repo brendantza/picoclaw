@@ -180,8 +180,12 @@ func gatewayCmd(debug bool) error {
 		fmt.Println("✓ Device event service started")
 	}
 
-	// Initialize team service
-	teamsStoragePath := filepath.Join(cfg.WorkspacePath(), "..", "teams")
+	// Initialize team service - use same path as launcher for shared storage
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	teamsStoragePath := filepath.Join(home, ".picoclaw", "teams")
 	teamService, err := teams.NewService(teamsStoragePath)
 	if err != nil {
 		fmt.Printf("Warning: Failed to initialize team service: %v\n", err)

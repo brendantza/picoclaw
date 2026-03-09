@@ -1,0 +1,36 @@
+version: '3.8'
+
+# Combined agent: Launcher UI + Heartbeat in single container
+# Access launcher at http://localhost:18801
+
+services:
+  picoclaw-agent:
+    image: ghcr.io/brendantza/picoclaw:dev
+    container_name: picoclaw-dev-agent
+    restart: unless-stopped
+    # Override entrypoint to run combined script
+    entrypoint: ["/bin/sh"]
+    command: ["/agent-launcher-combined.sh"]
+    environment:
+      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
+      # NEW TEAM CONFIGURATION - Updated for Dev-Team-62747d75
+      - PICOCLAW_TEAM_ID=Dev-Team-62747d75
+      - PICOCLAW_TEAM_KEY=pk_team_uEQuOZvpIJCAOUHaoe_DeedTlRBZpC4tjPC_bNvtwoc=
+      - PICOCLAW_GATEWAY_ADDRESS=http://192.168.6.122:18790
+      - PICOCLAW_AGENT_ROLE=fullstack
+      - PICOCLAW_AGENT_ID=dev-agent-docker
+      - PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=${PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY:-}
+    ports:
+      - '18801:18800'  # Launcher UI
+    volumes:
+      - ./agent-launcher-combined.sh:/agent-launcher-combined.sh:ro
+      - picoclaw-agent-data:/home/picoclaw/.picoclaw
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:18800/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  picoclaw-agent-data:
+    driver: local
