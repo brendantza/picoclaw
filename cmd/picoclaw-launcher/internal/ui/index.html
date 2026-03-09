@@ -657,7 +657,11 @@
                             <button class="btn btn-sm" onclick="showPanel('panelTeams')" data-i18n="common.back">← Back</button>
                         </div>
                     </div>
-                    <div class="team-info-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div class="team-info-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                        <div class="info-card" style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 16px;">
+                            <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;" data-i18n="teams.team_id">Team ID</div>
+                            <div id="teamDetailId" style="font-size: 14px; font-weight: 600; font-family: 'JetBrains Mono', monospace;">-</div>
+                        </div>
                         <div class="info-card" style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 16px;">
                             <div style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;" data-i18n="teams.status">Status</div>
                             <div id="teamDetailStatus" style="font-size: 16px; font-weight: 600;">Active</div>
@@ -931,6 +935,7 @@ const i18nData = {
         'teams.max_agents_hint': 'Maximum number of agents that can join this team',
         'teams.create_btn': 'Create Team',
         'teams.noTeams': 'No teams created yet.',
+        'teams.team_id': 'Team ID',
         'teams.status': 'Status',
         'teams.agents': 'Agents',
         'teams.created': 'Created',
@@ -1083,6 +1088,7 @@ const i18nData = {
         'teams.max_agents_hint': '\u53EF\u52A0\u5165\u6B64\u56E2\u961F\u7684\u6700\u5927\u4EE3\u7406\u6570\u91CF',
         'teams.create_btn': '\u521B\u5EFA\u56E2\u961F',
         'teams.noTeams': '\u5C1A\u672A\u521B\u5EFA\u56E2\u961F\u3002',
+        'teams.team_id': '\u56E2\u961F ID',
         'teams.status': '\u72B6\u6001',
         'teams.agents': '\u4EE3\u7406',
         'teams.created': '\u521B\u5EFA\u65F6\u95F4',
@@ -2268,6 +2274,7 @@ async function showTeamDetail(teamId) {
         
         document.getElementById('teamDetailName').textContent = team.name;
         document.getElementById('teamDetailDesc').textContent = team.description || t('teams.noDescription');
+        document.getElementById('teamDetailId').textContent = team.id;
         document.getElementById('teamDetailStatus').textContent = team.status;
         document.getElementById('teamDetailAgents').textContent = `${team.agents ? team.agents.length : 0} / ${team.settings.max_agents}`;
         document.getElementById('teamDetailCreated').textContent = new Date(team.created_at).toLocaleString();

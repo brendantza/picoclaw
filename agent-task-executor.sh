@@ -69,6 +69,27 @@ execute_task() {
             echo "Echo: $MESSAGE"
             submit_result "$TASK_ID" "completed" "{\"echo\":\"$MESSAGE\"}"
             ;;
+        "system")
+            # System commands from controller
+            ACTION=$(echo "$PAYLOAD" | grep -o '"action":"[^"]*"' | head -1 | cut -d'"' -f4)
+            echo "System command: $ACTION"
+            
+            case "$ACTION" in
+                "leave")
+                    echo "Controller requested to leave team. Cleaning up..."
+                    # Remove team config file
+                    rm -f "$SESSION_FILE"
+                    echo "Team config removed. Agent will exit."
+                    submit_result "$TASK_ID" "completed" "{\"status\":\"left\",\"message\":\"Agent left team and cleaned up local data\"}"
+                    # Exit the task executor - agent needs to rejoin to continue
+                    exit 0
+                    ;;
+                *)
+                    echo "Unknown system action: $ACTION"
+                    submit_result "$TASK_ID" "failed" "{\"error\":\"Unknown system action: $ACTION\"}"
+                    ;;
+            esac
+            ;;
         *)
             echo "Unknown task type: $TASK_TYPE"
             submit_result "$TASK_ID" "failed" "{\"error\":\"Unknown task type: $TASK_TYPE\"}"

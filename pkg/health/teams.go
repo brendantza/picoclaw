@@ -6,6 +6,7 @@ package health
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/sipeed/picoclaw/pkg/teams"
 )
@@ -272,6 +273,25 @@ func handleListAgents(w http.ResponseWriter, r *http.Request, teamService *teams
 func handleEvictAgent(w http.ResponseWriter, r *http.Request, teamService *teams.Service) {
 	teamID := r.PathValue("id")
 	agentID := r.PathValue("agentId")
+
+	// First, send a leave task to the agent so it can clean up
+	_, err := teamService.CreateTask(teamID, teams.CreateTaskRequest{
+		AgentID:     agentID,
+		Type:        "system",
+		Title:       "Leave Team",
+		Description: "Controller requested agent to leave team",
+		Priority:    10, // High priority
+		Payload: map[string]any{
+			"action": "leave",
+			"team_id": teamID,
+		},
+		CreatedBy: "controller",
+	})
+	// Continue with eviction even if task creation fails (agent may already be offline)
+	_ = err
+
+	// Wait a moment for agent to receive and process the task
+	time.Sleep(500 * time.Millisecond)
 
 	if err := teamService.EvictAgent(teamID, agentID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
