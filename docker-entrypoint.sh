@@ -9,6 +9,10 @@ CONFIG_FILE="${CONFIG_DIR}/config.json"
 
 # Create config directory if it doesn't exist
 mkdir -p "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR/teams"
+
+# Ensure correct ownership for picoclaw user
+chown -R picoclaw:picoclaw "$CONFIG_DIR"
 
 # Generate config.json from environment variables
 if [ ! -f "$CONFIG_FILE" ] || [ "${PICOCLAW_OVERWRITE_CONFIG:-false}" = "true" ]; then
