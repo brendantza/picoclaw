@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/teams"
 )
 
@@ -149,11 +148,7 @@ func handleAgentHeartbeat(w http.ResponseWriter, r *http.Request, teamService *t
 	}
 
 	// Touch session to extend its lifetime
-	if err := teamService.TouchSession(req.SessionID); err != nil {
-		// Log but don't fail - the heartbeat succeeded
-		logger := map[string]any{"session_id": req.SessionID, "error": err}
-		_ = logger // Avoid unused variable
-	}
+	_ = teamService.TouchSession(req.SessionID) // Ignore error - heartbeat succeeded
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})

@@ -1,6 +1,6 @@
 version: '3.8'
 
-# Combined agent: Launcher UI + Heartbeat in single container
+# Combined agent: Launcher UI + Heartbeat + Task Executor
 # Access launcher at http://localhost:18801
 
 services:
@@ -8,11 +8,9 @@ services:
     image: ghcr.io/brendantza/picoclaw:dev
     container_name: picoclaw-dev-agent
     restart: unless-stopped
-    # Override entrypoint to run combined script
     entrypoint: ["/bin/sh"]
     command: ["/agent-launcher-combined.sh"]
     environment:
-      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
       # NEW TEAM CONFIGURATION - Updated for Dev-Team-62747d75
       - PICOCLAW_TEAM_ID=Dev-Team-62747d75
       - PICOCLAW_TEAM_KEY=pk_team_uEQuOZvpIJCAOUHaoe_DeedTlRBZpC4tjPC_bNvtwoc=
@@ -24,12 +22,30 @@ services:
       - '18801:18800'  # Launcher UI
     volumes:
       - ./agent-launcher-combined.sh:/agent-launcher-combined.sh:ro
+      - ./agent-task-executor.sh:/agent-task-executor.sh:ro
       - picoclaw-agent-data:/home/picoclaw/.picoclaw
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:18800/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # Task executor - polls and executes tasks from controller
+  task-executor:
+    image: ghcr.io/brendantza/picoclaw:dev
+    container_name: picoclaw-task-executor
+    restart: unless-stopped
+    entrypoint: ["/bin/sh"]
+    command: ["/agent-task-executor.sh"]
+    environment:
+      - PICOCLAW_TEAM_ID=Dev-Team-62747d75
+      - PICOCLAW_GATEWAY_ADDRESS=http://192.168.6.122:18790
+      - PICOCLAW_AGENT_ID=dev-agent-docker
+    volumes:
+      - ./agent-task-executor.sh:/agent-task-executor.sh:ro
+      - picoclaw-agent-data:/home/picoclaw/.picoclaw
+    depends_on:
+      - picoclaw-agent
 
 volumes:
   picoclaw-agent-data:
