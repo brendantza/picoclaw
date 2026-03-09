@@ -61,6 +61,7 @@ Use these commands to join, leave, and manage team membership.`,
 		newEvictCommand(teamsDirFn),
 		newWipeCommand(teamsDirFn),
 		newDiscoverCommand(),
+		taskCmd(),
 	)
 
 	return cmd
