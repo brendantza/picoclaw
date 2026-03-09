@@ -1,0 +1,57 @@
+# PicoClaw Dev Agent - Docker Compose
+# This runs a picoclaw agent that joins a team
+#
+# Usage:
+#   docker compose -f docker-compose.dev-agent.yml up -d
+#   
+# To view logs:
+#   docker compose -f docker-compose.dev-agent.yml logs -f
+
+services:
+  picoclaw-agent:
+    image: 'ghcr.io/brendantza/picoclaw:dev'
+    container_name: picoclaw-dev-agent
+    restart: unless-stopped
+    # Join team on startup, then run agent
+    entrypoint: >
+      sh -c "
+        mkdir -p /home/picoclaw/.picoclaw/teams &&
+        chown -R picoclaw:picoclaw /home/picoclaw/.picoclaw &&
+        su-exec picoclaw sh -c '
+          echo \"Joining team with gateway: $$GATEWAY_ADDRESS\" &&
+          picoclaw team join \"$$TEAM_ID\" \\
+            --key \"$$TEAM_KEY\" \\
+            --gateway \"$$GATEWAY_ADDRESS\" \\
+            --role \"$$AGENT_ROLE\" \\
+            --agent-id \"$$AGENT_ID\" 2>&1 || echo \"Join failed or already joined\" &&
+          echo \"Starting agent...\" &&
+          exec picoclaw agent
+        '
+      "
+    environment:
+      - PICOCLAW_HOME=/home/picoclaw/.picoclaw
+      # Team configuration - UPDATE THESE
+      - TEAM_ID=dev-team
+      - TEAM_KEY=pk_team_MK2-SdlgjeX0Mwt0BrkHKPY1DPs2ZJ6tj9xfkMs5NUM=
+      - GATEWAY_ADDRESS=http://192.168.6.122:18790
+      - AGENT_ROLE=worker
+      - AGENT_ID=dev-agent-docker
+      # Model configuration (for agent's own AI if needed)
+      - PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME=kimi-k2.5
+      # Add your API key here if the agent needs direct model access
+      - PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY=${PICOCLAW_PROVIDERS_KIMI_CODING_API_KEY:-}
+    volumes:
+      - 'picoclaw-agent-data:/home/picoclaw/.picoclaw'
+    networks:
+      - picoclaw-agent-network
+    # Required for picoclaw agent to work properly
+    stdin_open: true
+    tty: true
+
+networks:
+  picoclaw-agent-network:
+    driver: bridge
+
+volumes:
+  picoclaw-agent-data:
+    driver: local
