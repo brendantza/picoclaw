@@ -2179,7 +2179,7 @@ async function loadTeams() {
         currentTeams = await response.json();
         renderTeams();
     } catch (err) {
-        showToast('Error loading teams: ' + err.message, 'error');
+        showStatus('Error loading teams: ' + err.message, 'error');
     }
 }
 
@@ -2221,7 +2221,7 @@ async function createTeam() {
     console.log('Form data:', { name, description, maxAgents });
 
     if (!name) {
-        showToast(t('teams.nameRequired'), 'error');
+        showStatus(t('teams.nameRequired'), 'error');
         return;
     }
 
@@ -2239,7 +2239,7 @@ async function createTeam() {
         }
 
         const team = await response.json();
-        showToast(t('teams.createdSuccess'), 'success');
+        showStatus(t('teams.createdSuccess'), 'success');
         
         // Clear form
         document.getElementById('teamNameInput').value = '';
@@ -2255,7 +2255,7 @@ async function createTeam() {
         loadTeams();
     } catch (err) {
         console.error('createTeam error:', err);
-        showToast('Error creating team: ' + err.message, 'error');
+        showStatus('Error creating team: ' + err.message, 'error');
     }
 }
 
@@ -2284,7 +2284,7 @@ async function showTeamDetail(teamId) {
         
         showPanel('panelTeamDetail');
     } catch (err) {
-        showToast('Error loading team: ' + err.message, 'error');
+        showStatus('Error loading team: ' + err.message, 'error');
     }
 }
 
@@ -2347,7 +2347,7 @@ async function rotateTeamKey() {
         alert(t('teams.newKey') + '\n\n' + result.team_key);
         showTeamDetail(currentTeamId);
     } catch (err) {
-        showToast('Error rotating key: ' + err.message, 'error');
+        showStatus('Error rotating key: ' + err.message, 'error');
     }
 }
 
@@ -2360,10 +2360,10 @@ async function deleteTeam(teamId) {
         });
         if (!response.ok) throw new Error('Failed to delete team');
         
-        showToast(t('teams.deleted'), 'success');
+        showStatus(t('teams.deleted'), 'success');
         loadTeams();
     } catch (err) {
-        showToast('Error deleting team: ' + err.message, 'error');
+        showStatus('Error deleting team: ' + err.message, 'error');
     }
 }
 
@@ -2377,10 +2377,10 @@ async function evictAgent(agentId) {
         });
         if (!response.ok) throw new Error('Failed to evict agent');
         
-        showToast(t('teams.evicted'), 'success');
+        showStatus(t('teams.evicted'), 'success');
         showTeamDetail(currentTeamId);
     } catch (err) {
-        showToast('Error evicting agent: ' + err.message, 'error');
+        showStatus('Error evicting agent: ' + err.message, 'error');
     }
 }
 
