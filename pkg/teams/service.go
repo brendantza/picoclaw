@@ -25,6 +25,7 @@ type Service struct {
 	teams       map[string]*Team
 	agents      map[string]*Agent // agent_id -> agent (across all teams)
 	sessions    map[string]*AgentSession
+	taskQueue   *TaskQueue
 	mu          sync.RWMutex
 }
 
@@ -45,6 +46,7 @@ func NewService(storagePath string) (*Service, error) {
 		teams:       make(map[string]*Team),
 		agents:      make(map[string]*Agent),
 		sessions:    make(map[string]*AgentSession),
+		taskQueue:   NewTaskQueue(),
 	}
 
 	// Load existing teams
@@ -672,6 +674,133 @@ func (s *Service) saveTeam(team *Team) error {
 	}
 
 	return fileutil.WriteFileAtomic(path, data, 0600)
+}
+
+// Task Management Methods
+
+// CreateTask creates a new task in the team
+func (s *Service) CreateTask(teamID string, req CreateTaskRequest) (*Task, error) {
+	// Verify team exists
+	if _, err := s.GetTeam(teamID); err != nil {
+		return nil, err
+	}
+
+	// If agent specified, verify agent exists and belongs to team
+	if req.AgentID != "" {
+		agent, err := s.GetAgent(teamID, req.AgentID)
+		if err != nil {
+			return nil, fmt.Errorf("agent not found: %w", err)
+		}
+		if agent.Status != AgentStatusOnline {
+			return nil, fmt.Errorf("agent is not online")
+		}
+	}
+
+	task, err := s.taskQueue.CreateTask(teamID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.InfoCF("teams", "Task created",
+		map[string]any{"team_id": teamID, "task_id": task.ID, "type": task.Type})
+
+	return task, nil
+}
+
+// GetTask retrieves a task by ID
+func (s *Service) GetTask(taskID string) (*Task, error) {
+	return s.taskQueue.GetTask(taskID)
+}
+
+// ListTasksForTeam returns all tasks for a team
+func (s *Service) ListTasksForTeam(teamID string) []*Task {
+	return s.taskQueue.ListTasksForTeam(teamID)
+}
+
+// GetTasksForAgent returns tasks assigned to an agent
+func (s *Service) GetTasksForAgent(agentID string, status string) []*Task {
+	return s.taskQueue.GetTasksForAgent(agentID, status)
+}
+
+// PollTasksForAgent returns pending/assigned tasks for an agent to execute
+func (s *Service) PollTasksForAgent(teamID, agentID string) ([]*Task, error) {
+	// Verify agent belongs to team and is online
+	agent, err := s.GetAgent(teamID, agentID)
+	if err != nil {
+		return nil, err
+	}
+	if agent.Status != AgentStatusOnline && agent.Status != AgentStatusBusy {
+		return nil, fmt.Errorf("agent is not available")
+	}
+
+	// Get assigned tasks that are pending or assigned
+	tasks := s.taskQueue.GetTasksForAgent(agentID, "")
+	var pending []*Task
+	for _, task := range tasks {
+		if task.Status == TaskStatusPending || task.Status == TaskStatusAssigned {
+			// Auto-start assigned tasks
+			if task.Status == TaskStatusAssigned {
+				s.taskQueue.StartTask(task.ID)
+			}
+			pending = append(pending, task)
+		}
+	}
+
+	return pending, nil
+}
+
+// SubmitTaskResult submits the result of a completed task
+func (s *Service) SubmitTaskResult(teamID, agentID string, result TaskResult) error {
+	task, err := s.taskQueue.GetTask(result.TaskID)
+	if err != nil {
+		return err
+	}
+
+	// Verify task belongs to this agent
+	if task.AgentID != agentID {
+		return fmt.Errorf("task not assigned to this agent")
+	}
+
+	// Verify agent belongs to team
+	if _, err := s.GetAgent(teamID, agentID); err != nil {
+		return err
+	}
+
+	if result.Status == TaskStatusCompleted {
+		if err := s.taskQueue.CompleteTask(result.TaskID, result.Result); err != nil {
+			return err
+		}
+	} else if result.Status == TaskStatusFailed {
+		if err := s.taskQueue.FailTask(result.TaskID, result.Error); err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("invalid result status: %s", result.Status)
+	}
+
+	logger.InfoCF("teams", "Task completed",
+		map[string]any{"task_id": result.TaskID, "status": result.Status})
+
+	return nil
+}
+
+// GetAgent retrieves an agent by ID within a team
+func (s *Service) GetAgent(teamID, agentID string) (*Agent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	team, exists := s.teams[teamID]
+	if !exists {
+		return nil, fmt.Errorf("team not found: %s", teamID)
+	}
+
+	for _, agent := range team.Agents {
+		if agent.ID == agentID {
+			return agent, nil
+		}
+	}
+
+	return nil, fmt.Errorf("agent not found: %s", agentID)
 }
 
 func (s *Service) cleanupLoop() {

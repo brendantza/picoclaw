@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/teams"
 )
 
@@ -57,6 +58,29 @@ func RegisterTeamsAPI(mux *http.ServeMux, teamService *teams.Service) {
 
 	mux.HandleFunc("POST /api/teams/{id}/agents/{agentId}/wipe", func(w http.ResponseWriter, r *http.Request) {
 		handleWipeAgent(w, r, teamService)
+	})
+
+	// Task management endpoints
+	mux.HandleFunc("POST /api/teams/{id}/tasks", func(w http.ResponseWriter, r *http.Request) {
+		handleCreateTask(w, r, teamService)
+	})
+
+	mux.HandleFunc("GET /api/teams/{id}/tasks", func(w http.ResponseWriter, r *http.Request) {
+		handleListTasks(w, r, teamService)
+	})
+
+	mux.HandleFunc("GET /api/teams/{id}/tasks/{taskId}", func(w http.ResponseWriter, r *http.Request) {
+		handleGetTask(w, r, teamService)
+	})
+
+	// Agent task polling endpoint
+	mux.HandleFunc("GET /api/teams/{id}/agents/{agentId}/tasks", func(w http.ResponseWriter, r *http.Request) {
+		handlePollTasks(w, r, teamService)
+	})
+
+	// Agent task result submission
+	mux.HandleFunc("POST /api/teams/{id}/agents/{agentId}/tasks/{taskId}/result", func(w http.ResponseWriter, r *http.Request) {
+		handleSubmitTaskResult(w, r, teamService)
 	})
 }
 
@@ -280,4 +304,106 @@ func handleWipeAgent(w http.ResponseWriter, r *http.Request, teamService *teams.
 		"status":  "ok",
 		"message": "Agent wiped. Team key has been removed from agent.",
 	})
+}
+
+// Task handlers
+
+func handleCreateTask(w http.ResponseWriter, r *http.Request, teamService *teams.Service) {
+	teamID := r.PathValue("id")
+
+	var req teams.CreateTaskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	task, err := teamService.CreateTask(teamID, req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(task)
+}
+
+func handleListTasks(w http.ResponseWriter, r *http.Request, teamService *teams.Service) {
+	teamID := r.PathValue("id")
+
+	tasks := teamService.ListTasksForTeam(teamID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tasks)
+}
+
+func handleGetTask(w http.ResponseWriter, r *http.Request, teamService *teams.Service) {
+	taskID := r.PathValue("taskId")
+
+	task, err := teamService.GetTask(taskID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(task)
+}
+
+func handlePollTasks(w http.ResponseWriter, r *http.Request, teamService *teams.Service) {
+	teamID := r.PathValue("id")
+	agentID := r.PathValue("agentId")
+
+	// Validate session from header
+	sessionID := r.Header.Get("X-Session-ID")
+	if sessionID == "" {
+		http.Error(w, "Session required", http.StatusUnauthorized)
+		return
+	}
+
+	_, err := teamService.GetAgentSession(sessionID)
+	if err != nil {
+		http.Error(w, "Invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	tasks, err := teamService.PollTasksForAgent(teamID, agentID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tasks)
+}
+
+func handleSubmitTaskResult(w http.ResponseWriter, r *http.Request, teamService *teams.Service) {
+	teamID := r.PathValue("id")
+	agentID := r.PathValue("agentId")
+
+	// Validate session from header
+	sessionID := r.Header.Get("X-Session-ID")
+	if sessionID == "" {
+		http.Error(w, "Session required", http.StatusUnauthorized)
+		return
+	}
+
+	_, err := teamService.GetAgentSession(sessionID)
+	if err != nil {
+		http.Error(w, "Invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	var result teams.TaskResult
+	if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := teamService.SubmitTaskResult(teamID, agentID, result); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
